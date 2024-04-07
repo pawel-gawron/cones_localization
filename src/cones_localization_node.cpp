@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "cones_localization/cones_localization_node.hpp"
+#include <cmath>
 
 namespace cones_localization
 {
@@ -60,24 +61,29 @@ void ConesLocalizationNode::cameraInfoCallback(const sensor_msgs::msg::CameraInf
 {
     if (!executed_)
     {
-      float fx = msg->k[0];
-      float cx = msg->k[2];
+      fx_ = msg->k[0];
+      cx_ = msg->k[2];
       float fy = msg->k[4];
-      float cy = msg->k[5]; 
+      camera_matrix_ = cv::Mat(3, 3, CV_64F, msg->k.data());
+      distortion_coefficients_ = cv::Mat(1, 5, CV_64F, msg->d.data());
+      // float cy = msg->k[5]; 
       image_width_ = msg->width;
       image_height_ = msg->height;
 
-      max_x_camera_ = (image_width_ - 1 - cx) / fx;
-      min_x_camera_ = -cx / fx;
-      angle_max_ = std::atan(max_x_camera_ / fx);
+      max_x_camera_ = (image_width_ - 1 - cx_) / fx_;
+      min_x_camera_ = -cx_ / fx_;
+      angle_max_ = std::atan(max_x_camera_ / fx_);
 
-      camera_fov_horizontal_ = 2 * std::atan(image_width_ / (2 * fx));
+      camera_fov_horizontal_ = 2 * std::atan(image_width_ / (2 * fx_));
       camera_fov_vertical_ = 2 * std::atan(image_height_ / (2 * fy));
 
-      max_y_camera_ = (image_height_ - 1 - cy) / fy;
-      min_y_camera_ = -cy / fy;
+      // max_y_camera_ = (image_height_ - 1 - cy) / fy;
+      // min_y_camera_ = -cy / fy;
 
       angle_min_ = -angle_max_;
+
+      max_y_camera_ = image_height_ - 1;  // Maksymalna współrzędna Y piksela
+      min_y_camera_ = -0.1;
 
       executed_ = true;
     }
@@ -103,7 +109,6 @@ void ConesLocalizationNode::imageCallback(const sensor_msgs::msg::Image::SharedP
 
   for (const auto& point : lidar_points_)
   {
-    // std::cout << "Point x: " << point.first << " y: " << point.second << std::endl;
     cv::circle(frame_cv, cv::Point(point.first, point.second), 2, cv::Scalar(0, 255, 0), -1);
   }
 
@@ -148,41 +153,38 @@ void ConesLocalizationNode::lidarCallback(const sensor_msgs::msg::LaserScan::Sha
 
   std::vector<float> ranges = msg->ranges;
 
-  // const float lidar_height = 100;  // Lidar height above ground (meters)
-  // const float camera_offset = 0.1; // Camera offset below lidar (meters)
+  const float camera_offset = 0.1;
+  const float max_distance = 30.0;
+  int y_pixel;
+  int x_pixel;
+  float x_camera;
+  float normalized_angle;
+  float alpha;
+  float angle;
+  float distance;
 
   for (uint32_t i = 0; i < ranges.size(); ++i)
   { 
-    float angle = min_angle + i * angle_increment;    
-    float distance = ranges[i]; 
-
-    // std::cout << "angle: " << angle << std::endl;
-    // std::cout << "min_angle" << min_angle << std::endl;
-    // std::cout << "max_angle" << max_angle << std::endl;
-    // std::cout << "camera_fov_" << camera_fov_ << std::endl;
-    // std::cout << "max_angle - min_angle" << max_angle - min_angle << std::endl;
+    angle = max_angle - i * angle_increment;    
+    distance = ranges[i];
 
     // Check if point is within camera FOV 
     if (angle >= min_angle && angle <= max_angle && angle <= camera_fov_horizontal_/2 && angle >= -camera_fov_horizontal_/2)
     {
         // Normalize angle to be between 0 and 1 relative to camera FOV
-        float normalized_angle = ((angle+(camera_fov_horizontal_/2)) / (camera_fov_horizontal_));
+        normalized_angle = ((angle+(camera_fov_horizontal_/2)) / (camera_fov_horizontal_));
 
-        // Estimate image x-coordinate 
-        int x_pixel = static_cast<int>(normalized_angle * image_width_); 
+        x_camera = tan(normalized_angle * camera_fov_horizontal_ - camera_fov_horizontal_ / 2);
+        x_pixel = static_cast<int>(fx_ * x_camera + cx_);
 
-        // Assuming fixed y position for now 
-        // int y_pixel = image_height_ / 2;
+        if (distance >= max_distance) {
+            y_pixel = image_height_ / 2;
+            continue;
+        }
 
-        float normalized_distance = distance / 30;
+        alpha = atan(distance / camera_offset);
 
-        // Invert and scale for y_pixel calculation
-        float normalized_y = 1.0 - normalized_distance;  // 1.0 is top, 0.0 is bottom
-        int y_pixel = static_cast<int>((normalized_y) * image_height_);
-
-
-        std::cout << "x_pixel: " << x_pixel << std::endl;
-        std::cout << "y_pixel: " << y_pixel << std::endl;
+        y_pixel = static_cast<int>((alpha/1.5708) * image_height_/2);
 
         lidar_points_.emplace_back(x_pixel, y_pixel); 
     }  

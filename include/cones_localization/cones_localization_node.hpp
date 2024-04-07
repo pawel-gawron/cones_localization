@@ -53,6 +53,11 @@ private:
   float min_y_camera_;
   float camera_fov_horizontal_;
   float camera_fov_vertical_;
+  float fx_;
+  float cx_;
+
+  cv::Mat camera_matrix_; // Macierz kamery
+  cv::Mat distortion_coefficients_;
 
   float angle_max_;
   float angle_min_;
