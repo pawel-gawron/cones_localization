@@ -91,14 +91,13 @@ void ConesLocalizationNode::cameraInfoCallback(const sensor_msgs::msg::CameraInf
 
 void ConesLocalizationNode::bboxesCallback(const cones_interfaces::msg::Cones::SharedPtr msg)
 {
-  // RCLCPP_INFO(this->get_logger(), "Received bboxes message");
-  // Print the message to the output
-  // You can access the message data using msg->data or other relevant fields
-  // Example: std::cout << "Message data: " << msg->data << std::endl;
-  cones_interfaces::msg::Cones cones;
-  cones.header = msg->header;
-  // RCLCPP_INFO(this->get_logger(), cones.header);
-  std::cout << "Message data: " << msg->header.frame_id << std::endl;
+  cones_->header = msg->header;
+  cones_->bboxes = msg->bboxes;
+
+  // for (const auto& bbox : cones->bboxes)
+  // {
+  //   std::cout << "Bbox: " << bbox.x1 << " " << bbox.x2 << " " << bbox.y1 << " " << bbox.y2 << std::endl;
+  // }
 }
 
 void ConesLocalizationNode::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg)
@@ -106,10 +105,39 @@ void ConesLocalizationNode::imageCallback(const sensor_msgs::msg::Image::SharedP
   // RCLCPP_INFO(this->get_logger(), "Received image message");
   cv::Mat frame_cv;
   frame_cv = cv_bridge::toCvCopy(msg, "bgr8")->image;
-
-  for (const auto& point : lidar_points_)
+  
+  for (const auto& bbox : cones_->bboxes)
   {
-    cv::circle(frame_cv, cv::Point(point.first, point.second), 2, cv::Scalar(0, 255, 0), -1);
+    bboxes_points_.clear();
+    for (const auto& point : lidar_points_)
+    {
+      if(std::get<0>(point) >= bbox.x1 && std::get<0>(point) <= bbox.x2)
+      {
+        cv::circle(frame_cv, cv::Point(std::get<0>(point), std::get<1>(point)), 2, cv::Scalar(0, 0, 255), -1);
+        bboxes_points_.push_back(std::get<2>(point));
+      }
+    }
+    if (!bboxes_points_.empty())
+    {
+      // Sort the points in ascending order
+      std::sort(bboxes_points_.begin(), bboxes_points_.end());
+
+      // Calculate the median
+      float median;
+      if (bboxes_points_.size() % 2 == 0)
+      {
+        median = (bboxes_points_[bboxes_points_.size() / 2 - 1] + bboxes_points_[bboxes_points_.size() / 2]) / 2.0;
+      }
+      else
+      {
+        median = bboxes_points_[bboxes_points_.size() / 2];
+      }
+
+      float rounded_median = std::round(median * 100) / 100;
+      std::stringstream ss;
+      ss << std::fixed << std::setprecision(2) << rounded_median;
+      cv::putText(frame_cv, ss.str(), cv::Point(bbox.x2, bbox.y1), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
+    }
   }
 
   cv::imshow("Cones from localization", frame_cv);
@@ -131,16 +159,11 @@ void ConesLocalizationNode::lidarCallback(const sensor_msgs::msg::LaserScan::Sha
   scan_msg->range_min = msg->range_min;
   scan_msg->range_max = msg->range_max;
 
-  max_range = msg->range_max;
-
-  // const int no_data = -1;
-  // std::vector<int> v_pointcloud_index;
-
   // determine amount of rays to create
   uint32_t ranges_size = std::ceil(
     (scan_msg->angle_max - scan_msg->angle_min) / scan_msg->angle_increment);
 
-  std::cout << "ranges_size: " << ranges_size << std::endl;
+  // std::cout << "ranges_size: " << ranges_size << std::endl;
 
 
   lidar_points_.clear();
@@ -154,7 +177,7 @@ void ConesLocalizationNode::lidarCallback(const sensor_msgs::msg::LaserScan::Sha
   std::vector<float> ranges = msg->ranges;
 
   const float camera_offset = 0.1;
-  const float max_distance = 30.0;
+  max_range_ = msg->range_max;
   int y_pixel;
   int x_pixel;
   float x_camera;
@@ -163,7 +186,7 @@ void ConesLocalizationNode::lidarCallback(const sensor_msgs::msg::LaserScan::Sha
   float angle;
   float distance;
 
-  for (uint32_t i = 0; i < ranges.size(); ++i)
+  for (uint32_t i = 0; i < ranges_size; ++i)
   { 
     angle = max_angle - i * angle_increment;    
     distance = ranges[i];
@@ -177,7 +200,7 @@ void ConesLocalizationNode::lidarCallback(const sensor_msgs::msg::LaserScan::Sha
         x_camera = tan(normalized_angle * camera_fov_horizontal_ - camera_fov_horizontal_ / 2);
         x_pixel = static_cast<int>(fx_ * x_camera + cx_);
 
-        if (distance >= max_distance) {
+        if (distance >= max_range_) {
             y_pixel = image_height_ / 2;
             continue;
         }
@@ -186,7 +209,7 @@ void ConesLocalizationNode::lidarCallback(const sensor_msgs::msg::LaserScan::Sha
 
         y_pixel = static_cast<int>((alpha/1.5708) * image_height_/2);
 
-        lidar_points_.emplace_back(x_pixel, y_pixel); 
+        lidar_points_.emplace_back(x_pixel, y_pixel, distance);
     }  
   }
 }

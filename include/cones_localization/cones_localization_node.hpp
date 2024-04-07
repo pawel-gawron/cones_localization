@@ -62,8 +62,10 @@ private:
   float angle_max_;
   float angle_min_;
 
-  std::vector<std::pair<float, float>> lidar_points_;
-  float max_range;
+  std::vector<std::tuple<float, float, float>> lidar_points_;
+  std::vector<float> bboxes_points_;
+  std::unique_ptr<cones_interfaces::msg::Cones> cones_ = std::make_unique<cones_interfaces::msg::Cones>();
+  float max_range_;
 
   void bboxesCallback(const cones_interfaces::msg::Cones::SharedPtr msg);
   void imageCallback(const sensor_msgs::msg::Image::SharedPtr msg);
