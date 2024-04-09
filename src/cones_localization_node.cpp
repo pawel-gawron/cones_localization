@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "cones_localization/cones_localization_node.hpp"
-#include <cmath>
 
 namespace cones_localization
 {
@@ -25,6 +24,8 @@ ConesLocalizationNode::ConesLocalizationNode(const rclcpp::NodeOptions & options
   cones_localization_ = std::make_unique<cones_localization::ConesLocalization>();
   param_name_ = this->declare_parameter("param_name", 456);
   cones_localization_->foo(param_name_);
+
+  timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&ConesLocalizationNode::timerCallback, this));
 
   bboxes_sub_ = this->create_subscription<cones_interfaces::msg::Cones>(
   "/output_bboxes",
@@ -55,6 +56,29 @@ ConesLocalizationNode::ConesLocalizationNode(const rclcpp::NodeOptions & options
   custom_qos,
   std::bind(&ConesLocalizationNode::cameraInfoCallback, this, 
   std::placeholders::_1));
+}
+
+void ConesLocalizationNode::timerCallback()
+{
+  std::cout << "Timer callback" << std::endl;
+    if (!lidar_queue_.empty() && !bboxes_queue_.empty() && !image_queue_.empty() && !localization_queue_.empty())
+    {
+        auto lidar_msg = lidar_queue_.front();
+        lidar_queue_.pop();
+        lidar_points_test_ = cones_localization_->lidarProcessing(lidar_msg, fx_, cx_, camera_fov_horizontal_, image_height_);
+
+        auto bboxes_msg = bboxes_queue_.front();
+        bboxes_queue_.pop();
+        cones_test_ = cones_localization_->bboxesProcessing(bboxes_msg);
+
+        auto image_msg = image_queue_.front();
+        image_queue_.pop();
+        cones_localization_->imageProcessing(image_msg, lidar_points_test_, lidar_points_test_, cones_test_);
+
+        auto localization_msg = localization_queue_.front();
+        localization_queue_.pop();
+        cones_localization_->localizationProcessing(localization_msg);
+    }
 }
 
 void ConesLocalizationNode::cameraInfoCallback(const sensor_msgs::msg::CameraInfo::SharedPtr msg)
@@ -94,6 +118,11 @@ void ConesLocalizationNode::bboxesCallback(const cones_interfaces::msg::Cones::S
   cones_->header = msg->header;
   cones_->bboxes = msg->bboxes;
 
+  if (!bboxes_queue_.empty()) {
+      bboxes_queue_.pop();
+    }
+    bboxes_queue_.push(msg);
+
   // for (const auto& bbox : cones->bboxes)
   // {
   //   std::cout << "Bbox: " << bbox.x1 << " " << bbox.x2 << " " << bbox.y1 << " " << bbox.y2 << std::endl;
@@ -102,6 +131,10 @@ void ConesLocalizationNode::bboxesCallback(const cones_interfaces::msg::Cones::S
 
 void ConesLocalizationNode::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg)
 {
+  if (!image_queue_.empty()) {
+    image_queue_.pop();
+  }
+  image_queue_.push(msg);
   // RCLCPP_INFO(this->get_logger(), "Received image message");
   cv::Mat frame_cv;
   frame_cv = cv_bridge::toCvCopy(msg, "bgr8")->image;
@@ -146,7 +179,10 @@ void ConesLocalizationNode::imageCallback(const sensor_msgs::msg::Image::SharedP
 
 void ConesLocalizationNode::lidarCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
 {
-  RCLCPP_INFO(this->get_logger(), "Received lidar message");
+  if (!lidar_queue_.empty()) {
+    lidar_queue_.pop();
+  }
+  lidar_queue_.push(msg);
 
   auto scan_msg = std::make_unique<sensor_msgs::msg::LaserScan>();
   scan_msg->header = msg->header;
@@ -216,6 +252,10 @@ void ConesLocalizationNode::lidarCallback(const sensor_msgs::msg::LaserScan::Sha
 
 void ConesLocalizationNode::localizationCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg)
 {
+  if (!localization_queue_.empty()) {
+    localization_queue_.pop();
+  }
+  localization_queue_.push(msg);
   RCLCPP_INFO(this->get_logger(), "Received localization message");
   geometry_msgs::msg::PoseWithCovarianceStamped imu;
   imu.header = msg->header;
