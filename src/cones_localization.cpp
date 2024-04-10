@@ -29,12 +29,9 @@ int64_t ConesLocalization::foo(int64_t bar) const
   return bar;
 }
 
-std::vector<std::tuple<float, float, float>> ConesLocalization::lidarProcessing(const sensor_msgs::msg::LaserScan::SharedPtr msg,
+void ConesLocalization::lidarProcessing(const sensor_msgs::msg::LaserScan::SharedPtr msg,
                                         float fx_, float cx_, float camera_fov_horizontal_, float image_height_)
   {
-    std::cout << "Lidar processing " << std::endl;
-    std::cout << msg->header.frame_id << std::endl;
-
     auto scan_msg = std::make_unique<sensor_msgs::msg::LaserScan>();
     scan_msg->header = msg->header;
 
@@ -99,28 +96,62 @@ std::vector<std::tuple<float, float, float>> ConesLocalization::lidarProcessing(
           lidar_points_.emplace_back(x_pixel, y_pixel, distance);
       }  
     }
-
-    return lidar_points_;
   }
 
-std::unique_ptr<cones_interfaces::msg::Cones> ConesLocalization::bboxesProcessing(const cones_interfaces::msg::Cones::SharedPtr msg)
+void ConesLocalization::bboxesProcessing(const cones_interfaces::msg::Cones::SharedPtr msg)
 {
-  std::cout << "Bboxes processing" <<std::endl;
-  std::cout << msg->header.frame_id << std::endl;
+  cones_->header = msg->header;
+  cones_->bboxes = msg->bboxes;
 }
 
-void ConesLocalization::imageProcessing(const sensor_msgs::msg::Image::SharedPtr msg,
-                                        std::vector<std::tuple<float, float, float>> lidar_points_,
-                                        std::unique_ptr<cones_interfaces::msg::Cones> cones_test_)
+void ConesLocalization::imageProcessing(const sensor_msgs::msg::Image::SharedPtr msg)
 {
-  std::cout << "Image processing" <<std::endl;
-  std::cout << msg->header.frame_id << std::endl;
+  cv::Mat frame_cv;
+  frame_cv = cv_bridge::toCvCopy(msg, "bgr8")->image;
+  
+  for (const auto& bbox : cones_->bboxes)
+  {
+    bboxes_points_.clear();
+    for (const auto& point : lidar_points_)
+    {
+      if(std::get<0>(point) >= bbox.x1 && std::get<0>(point) <= bbox.x2)
+      {
+        cv::circle(frame_cv, cv::Point(std::get<0>(point), std::get<1>(point)), 2, cv::Scalar(0, 0, 255), -1);
+        bboxes_points_.push_back(std::get<2>(point));
+      }
+    }
+    if (!bboxes_points_.empty())
+    {
+      // Sort the points in ascending order
+      std::sort(bboxes_points_.begin(), bboxes_points_.end());
+
+      // Calculate the median
+      float median;
+      if (bboxes_points_.size() % 2 == 0)
+      {
+        median = (bboxes_points_[bboxes_points_.size() / 2 - 1] + bboxes_points_[bboxes_points_.size() / 2]) / 2.0;
+      }
+      else
+      {
+        median = bboxes_points_[bboxes_points_.size() / 2];
+      }
+
+      float rounded_median = std::round(median * 100) / 100;
+      std::stringstream ss;
+      ss << std::fixed << std::setprecision(2) << rounded_median;
+      cv::putText(frame_cv, ss.str(), cv::Point(bbox.x2, bbox.y1), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
+    }
+}
+  cv::imshow("Cones from localization", frame_cv);
+  cv::waitKey(1);
 }
 
 void ConesLocalization::localizationProcessing(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg)
 {
-  std::cout << "Localization processing" << std::endl;
-  std::cout << msg->header.frame_id << std::endl;
+  geometry_msgs::msg::PoseWithCovarianceStamped imu;
+  imu.header = msg->header;
+  // RCLCPP_INFO(this->get_logger(), imu.header);
+  std::cout << "Message data: " << msg->header.frame_id << std::endl;
 }
 
 }  // namespace cones_localization

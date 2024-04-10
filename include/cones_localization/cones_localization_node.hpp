@@ -64,19 +64,17 @@ private:
   float angle_max_;
   float angle_min_;
 
-  std::vector<std::tuple<float, float, float>> lidar_points_;
-  std::vector<std::tuple<float, float, float>> lidar_points_test_;
-  std::vector<float> bboxes_points_;
-  std::unique_ptr<cones_interfaces::msg::Cones> cones_ = std::make_unique<cones_interfaces::msg::Cones>();
-  std::unique_ptr<cones_interfaces::msg::Cones> cones_test_ = std::make_unique<cones_interfaces::msg::Cones>();
-  float max_range_;
-
   std::queue<sensor_msgs::msg::LaserScan::SharedPtr> lidar_queue_;
   std::queue<cones_interfaces::msg::Cones::SharedPtr> bboxes_queue_;
   std::queue<sensor_msgs::msg::Image::SharedPtr> image_queue_;
   std::queue<geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr> localization_queue_;
 
   rclcpp::TimerBase::SharedPtr timer_;
+
+  std::recursive_mutex lidar_queue_mutex_;
+  std::recursive_mutex bboxes_queue_mutex_;
+  std::recursive_mutex image_queue_mutex_;
+  std::recursive_mutex localization_queue_mutex_;
 
   void timerCallback();
 
