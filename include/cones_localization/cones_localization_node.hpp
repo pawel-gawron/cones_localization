@@ -15,12 +15,20 @@
 #ifndef CONES_LOCALIZATION__CONES_LOCALIZATION_NODE_HPP_
 #define CONES_LOCALIZATION__CONES_LOCALIZATION_NODE_HPP_
 
+#include <chrono>
+#include <inttypes.h>
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
+#include "rclcpp/time.hpp"
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/opencv.hpp>
 #include <queue>
 #include <cmath>
+#include <message_filters/subscriber.h>
+#include <message_filters/synchronizer.h>
+#include <message_filters/sync_policies/exact_time.h>
+#include <message_filters/sync_policies/approximate_time.h>
+
 
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
@@ -31,7 +39,9 @@
 
 #include "cones_localization/cones_localization.hpp"
 #include "cones_interfaces/msg/bounding_box.hpp" 
-#include "cones_interfaces/msg/cones.hpp" 
+#include "cones_interfaces/msg/cones.hpp"
+
+#include <rmw/qos_profiles.h>
 
 namespace cones_localization
 {
@@ -76,6 +86,10 @@ private:
   std::recursive_mutex image_queue_mutex_;
   std::recursive_mutex localization_queue_mutex_;
 
+  typedef message_filters::sync_policies::ApproximateTime<cones_interfaces::msg::Cones,
+                                                    sensor_msgs::msg::Image,
+                                                    sensor_msgs::msg::LaserScan> approx_policy;
+
   void timerCallback();
 
   void bboxesCallback(const cones_interfaces::msg::Cones::SharedPtr msg);
@@ -83,11 +97,22 @@ private:
   void lidarCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
   void localizationCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
   void cameraInfoCallback(const sensor_msgs::msg::CameraInfo::SharedPtr msg);
+
+  void approxCallback(const cones_interfaces::msg::Cones::SharedPtr cones_msg,
+                                            const sensor_msgs::msg::Image::SharedPtr image_msg,
+                                            const sensor_msgs::msg::LaserScan::SharedPtr lidar_msg);
+
+  // void callbackFunction(const std::shared_ptr<const cones_interfaces::msg::Cones>& cones_msg,
+  //                     const std::shared_ptr<const sensor_msgs::msg::Image>& image_msg,
+  //                     const std::shared_ptr<const sensor_msgs::msg::LaserScan>& lidar_msg);
+
   rclcpp::Subscription<cones_interfaces::msg::Cones>::SharedPtr bboxes_sub_;
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr localization_sub_;
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_sub_;
+
+  rmw_qos_profile_t custom_qos_profile = rmw_qos_profile_default;
 };
 }  // namespace cones_localization
 

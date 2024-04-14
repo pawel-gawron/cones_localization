@@ -13,6 +13,8 @@ find_package(geometry_msgs REQUIRED)
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 
+find_package(message_filters REQUIRED)
+
 include_directories(${PROJECT_NAME} SHARED
   ${OpenCV_INCLUDE_DIRS}
 )
@@ -45,6 +47,7 @@ if(BUILD_TESTING)
   ament_target_dependencies(test_cones_localization ${TEST_SOURCES})
   ament_target_dependencies(${PROJECT_NAME} geometry_msgs)
   ament_target_dependencies(${PROJECT_NAME}_node geometry_msgs)
+  ament_target_dependencies(${PROJECT_NAME} rclcpp std_msgs message_filters)
   target_link_libraries(test_cones_localization ${PROJECT_NAME})
 endif()
 
