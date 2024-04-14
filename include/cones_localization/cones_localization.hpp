@@ -26,8 +26,9 @@
 #include <sensor_msgs/msg/laser_scan.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
+#include <nav_msgs/msg/occupancy_grid.hpp>
 
-#include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 
 #include "cones_localization/cones_localization.hpp"
 #include "cones_interfaces/msg/bounding_box.hpp" 
@@ -44,17 +45,22 @@ public:
   int64_t foo(int64_t bar) const;
 
   void lidarProcessing(const sensor_msgs::msg::LaserScan::SharedPtr msg,
-                        float fx_, float cx_, float camera_fov_horizontal_, float image_height_);
+                        float fx, float cx,
+                        float camera_fov_horizontal, float image_height);
   void bboxesProcessing(const cones_interfaces::msg::Cones::SharedPtr msg);
   void imageProcessing(const sensor_msgs::msg::Image::SharedPtr msg);
-  void localizationProcessing(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
+  std::shared_ptr<nav_msgs::msg::OccupancyGrid> localizationProcessing(const geometry_msgs::msg::PoseStamped::SharedPtr msg,
+                                                      const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map);
+
+// std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationProcessing(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr& localization_msg, const nav_msgs::msg::OccupancyGrid::SharedPtr& map_msg)
 
   std::unique_ptr<cones_interfaces::msg::Cones> cones_ = std::make_unique<cones_interfaces::msg::Cones>();
-  std::vector<float> bboxes_points_;
+  std::vector<std::tuple<float, float>> bboxes_points_;
 
 private:
-  std::vector<std::tuple<float, float, float>> lidar_points_;
+  std::vector<std::tuple<float, float, float, float>> lidar_points_;
   float max_range_;
+  std::vector<std::tuple<float, float>> cones_distances_;
 };
 
 }  // namespace cones_localization

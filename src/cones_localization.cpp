@@ -30,31 +30,17 @@ int64_t ConesLocalization::foo(int64_t bar) const
 }
 
 void ConesLocalization::lidarProcessing(const sensor_msgs::msg::LaserScan::SharedPtr msg,
-                                        float fx_, float cx_, float camera_fov_horizontal_, float image_height_)
+                                        float fx, float cx,
+                                        float camera_fov_horizontal, float image_height)
   {
-    auto scan_msg = std::make_unique<sensor_msgs::msg::LaserScan>();
-    scan_msg->header = msg->header;
-
-    scan_msg->angle_min = msg->angle_min;
-    scan_msg->angle_max = msg->angle_max;
-    scan_msg->angle_increment = msg->angle_increment;
-    scan_msg->time_increment = msg->time_increment;
-    scan_msg->scan_time = msg->scan_time;
-    scan_msg->range_min = msg->range_min;
-    scan_msg->range_max = msg->range_max;
-
-    // determine amount of rays to create
-    uint32_t ranges_size = std::ceil(
-      (scan_msg->angle_max - scan_msg->angle_min) / scan_msg->angle_increment);
-
-    // std::cout << "ranges_size: " << ranges_size << std::endl;
-
-
     lidar_points_.clear();
 
     float min_angle = msg->angle_min;
     float max_angle = msg->angle_max;
     float angle_increment = msg->angle_increment;
+
+    uint32_t ranges_size = std::ceil(
+      (max_angle - min_angle) / angle_increment);
 
     // float lidar_fov = max_angle - min_angle; 
 
@@ -65,7 +51,7 @@ void ConesLocalization::lidarProcessing(const sensor_msgs::msg::LaserScan::Share
     int y_pixel;
     int x_pixel;
     float x_camera;
-    float normalized_angle;
+    // float normalized_angle;
     float alpha;
     float angle;
     float distance;
@@ -76,24 +62,21 @@ void ConesLocalization::lidarProcessing(const sensor_msgs::msg::LaserScan::Share
       distance = ranges[i];
 
       // Check if point is within camera FOV 
-      if (angle >= min_angle && angle <= max_angle && angle <= camera_fov_horizontal_/2 && angle >= -camera_fov_horizontal_/2)
+      if (angle >= min_angle && angle <= max_angle && angle <= camera_fov_horizontal/2 && angle >= -camera_fov_horizontal/2)
       {
-          // Normalize angle to be between 0 and 1 relative to camera FOV
-          normalized_angle = ((angle+(camera_fov_horizontal_/2)) / (camera_fov_horizontal_));
-
-          x_camera = tan(normalized_angle * camera_fov_horizontal_ - camera_fov_horizontal_ / 2);
-          x_pixel = static_cast<int>(fx_ * x_camera + cx_);
+          x_camera = tan(angle);
+          x_pixel = static_cast<int>(fx * x_camera + cx);
 
           if (distance >= max_range_) {
-              y_pixel = image_height_ / 2;
+              y_pixel = image_height / 2;
               continue;
           }
 
           alpha = atan(distance / camera_offset);
 
-          y_pixel = static_cast<int>((alpha/1.5708) * image_height_/2);
+          y_pixel = static_cast<int>((alpha/(0.5 * M_PI)) * image_height/2);
 
-          lidar_points_.emplace_back(x_pixel, y_pixel, distance);
+          lidar_points_.emplace_back(x_pixel, y_pixel, distance, angle);
       }  
     }
   }
@@ -108,50 +91,97 @@ void ConesLocalization::imageProcessing(const sensor_msgs::msg::Image::SharedPtr
 {
   cv::Mat frame_cv;
   frame_cv = cv_bridge::toCvCopy(msg, "bgr8")->image;
+
+  cones_distances_.clear();
   
-  for (const auto& bbox : cones_->bboxes)
+  std::sort(cones_->bboxes.begin(), cones_->bboxes.end(), [](const cones_interfaces::msg::BoundingBox& bbox1, const cones_interfaces::msg::BoundingBox& bbox2) {
+    return (bbox1.x2 - bbox1.x1) * (bbox1.y2 - bbox1.y1) > (bbox2.x2 - bbox2.x1) * (bbox2.y2 - bbox2.y1);
+  });
+
+  int num_bboxes = std::min(static_cast<int>(cones_->bboxes.size()), 3);
+
+  for (int i = 0; i < num_bboxes; ++i)
   {
+    const auto& bbox = cones_->bboxes[i];
     bboxes_points_.clear();
+
     for (const auto& point : lidar_points_)
     {
       if(std::get<0>(point) >= bbox.x1 && std::get<0>(point) <= bbox.x2)
       {
         cv::circle(frame_cv, cv::Point(std::get<0>(point), std::get<1>(point)), 2, cv::Scalar(0, 0, 255), -1);
-        bboxes_points_.push_back(std::get<2>(point));
+        bboxes_points_.push_back(std::make_tuple(std::get<2>(point), std::get<3>(point)));
       }
     }
     if (!bboxes_points_.empty())
     {
-      // Sort the points in ascending order
       std::sort(bboxes_points_.begin(), bboxes_points_.end());
 
-      // Calculate the median
-      float median;
+      float median_distance;
+      float median_angle;
       if (bboxes_points_.size() % 2 == 0)
       {
-        median = (bboxes_points_[bboxes_points_.size() / 2 - 1] + bboxes_points_[bboxes_points_.size() / 2]) / 2.0;
+        median_distance = (std::get<0>(bboxes_points_[bboxes_points_.size() / 2 - 1]) + std::get<0>(bboxes_points_[bboxes_points_.size() / 2])) / 2.0;
+        median_angle = (std::get<1>(bboxes_points_[bboxes_points_.size() / 2 - 1]) + std::get<1>(bboxes_points_[bboxes_points_.size() / 2])) / 2.0;
       }
       else
       {
-        median = bboxes_points_[bboxes_points_.size() / 2];
+        median_distance = std::get<0>(bboxes_points_[bboxes_points_.size() / 2]);
+        median_angle = std::get<1>(bboxes_points_[bboxes_points_.size() / 2]);
       }
 
-      float rounded_median = std::round(median * 100) / 100;
+      float rounded_median = std::round(median_distance * 100) / 100;
       std::stringstream ss;
       ss << std::fixed << std::setprecision(2) << rounded_median;
       cv::putText(frame_cv, ss.str(), cv::Point(bbox.x2, bbox.y1), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
+      
+      cones_distances_.push_back(std::make_tuple(rounded_median, median_angle));
     }
-}
-  cv::imshow("Cones from localization", frame_cv);
-  cv::waitKey(1);
+    cv::imshow("Cones from localization", frame_cv);
+    cv::waitKey(1);
+  }
 }
 
-void ConesLocalization::localizationProcessing(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg)
+std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationProcessing(const geometry_msgs::msg::PoseStamped::SharedPtr msg,
+                                                const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map)
 {
-  geometry_msgs::msg::PoseWithCovarianceStamped imu;
-  imu.header = msg->header;
-  // RCLCPP_INFO(this->get_logger(), imu.header);
   std::cout << "Message data: " << msg->header.frame_id << std::endl;
+
+  if (msg_map){
+    std::cout << "Message data: " << msg_map->header.stamp.sec << std::endl;
+
+    nav_msgs::msg::OccupancyGrid::SharedPtr msg_map_copy = std::make_shared<nav_msgs::msg::OccupancyGrid>(*msg_map);
+
+    for (const auto& cone : cones_distances_)
+    {
+      float distance = std::get<0>(cone);
+      float angle = std::get<1>(cone);
+
+      float cone_x = msg->pose.position.x + distance * cos(angle);
+      float cone_y = msg->pose.position.y + distance * sin(angle);
+
+      unsigned int cone_grid_x = static_cast<unsigned int>((cone_x - msg_map_copy->info.origin.position.x) / msg_map_copy->info.resolution);
+      unsigned int cone_grid_y = static_cast<unsigned int>((cone_y - msg_map_copy->info.origin.position.y) / msg_map_copy->info.resolution);
+
+      std::cout << "Cone grid x: " << cone_grid_x << std::endl;
+      std::cout << "Cone grid y: " << cone_grid_y << std::endl;
+
+      // int radius = 1;
+      // for (int i = -radius; i <= radius; ++i) {
+      //   for (int j = -radius; j <= radius; ++j) {
+      //     unsigned int grid_x = cone_grid_x + i;
+      //     unsigned int grid_y = cone_grid_y + j;
+
+      //     if (grid_x < msg_map_copy->info.width && grid_y < msg_map_copy->info.height) {
+      //         int index = grid_y * msg_map_copy->info.width + grid_x;
+      //         msg_map_copy->data[index] = 100;
+      //     }
+      //   }
+      // }
+    }
+    return msg_map_copy;
+  }
+  return msg_map;
 }
 
 }  // namespace cones_localization
