@@ -52,8 +52,6 @@ public:
   std::shared_ptr<nav_msgs::msg::OccupancyGrid> localizationProcessing(const geometry_msgs::msg::PoseStamped::SharedPtr msg,
                                                       const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map);
 
-// std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationProcessing(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr& localization_msg, const nav_msgs::msg::OccupancyGrid::SharedPtr& map_msg)
-
   std::unique_ptr<cones_interfaces::msg::Cones> cones_ = std::make_unique<cones_interfaces::msg::Cones>();
   std::vector<std::tuple<float, float>> bboxes_points_;
 

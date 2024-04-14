@@ -166,18 +166,18 @@ std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationPro
       std::cout << "Cone grid x: " << cone_grid_x << std::endl;
       std::cout << "Cone grid y: " << cone_grid_y << std::endl;
 
-      // int radius = 1;
-      // for (int i = -radius; i <= radius; ++i) {
-      //   for (int j = -radius; j <= radius; ++j) {
-      //     unsigned int grid_x = cone_grid_x + i;
-      //     unsigned int grid_y = cone_grid_y + j;
+      int radius = 1;
+      for (int i = -radius; i <= radius; ++i) {
+        for (int j = -radius; j <= radius; ++j) {
+          unsigned int grid_x = cone_grid_x + i;
+          unsigned int grid_y = cone_grid_y + j;
 
-      //     if (grid_x < msg_map_copy->info.width && grid_y < msg_map_copy->info.height) {
-      //         int index = grid_y * msg_map_copy->info.width + grid_x;
-      //         msg_map_copy->data[index] = 100;
-      //     }
-      //   }
-      // }
+          if (grid_x < msg_map_copy->info.width && grid_y < msg_map_copy->info.height) {
+              int index = grid_y * msg_map_copy->info.width + grid_x;
+              msg_map_copy->data[index] = 100;
+          }
+        }
+      }
     }
     return msg_map_copy;
   }

@@ -122,9 +122,9 @@ void ConesLocalizationNode::timerCallback()
       auto localization_msg = findClosestMessage(localization_queue_, time_lidar);
       map_msg_local_ = cones_localization_->localizationProcessing(localization_msg, map_msg_);
 
-      // if (map_msg_local_ != nullptr){
-      // // map_pub_->publish(*map_msg_local_); 
-      // }
+      if (map_msg_local_ != nullptr){
+      map_pub_->publish(*map_msg_local_); 
+      }
     }
   }
 }
