@@ -26,7 +26,7 @@
 #include <cmath>
 #include <message_filters/subscriber.h>
 #include <message_filters/synchronizer.h>
-#include <message_filters/sync_policies/exact_time.h>
+#include "message_filters/time_synchronizer.h"
 #include <message_filters/sync_policies/approximate_time.h>
 
 
@@ -95,21 +95,22 @@ private:
 
   typedef message_filters::sync_policies::ApproximateTime<cones_interfaces::msg::Cones,
                                                     sensor_msgs::msg::Image,
-                                                    sensor_msgs::msg::LaserScan> approx_policy;
+                                                    sensor_msgs::msg::LaserScan> approximate_policy;
+  typedef message_filters::Synchronizer<approximate_policy> approximate_synchronizer;
 
-  void timerCallback();
-
-  void bboxesCallback(const cones_interfaces::msg::Cones::SharedPtr msg);
-  void imageCallback(const sensor_msgs::msg::Image::SharedPtr msg);
-  void lidarCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
   void localizationCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
   void cameraInfoCallback(const sensor_msgs::msg::CameraInfo::SharedPtr msg);
   void mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg);
+  void callbackSync(const cones_interfaces::msg::Cones::ConstSharedPtr &msg1,
+                    const sensor_msgs::msg::Image::ConstSharedPtr &msg2,
+                    const sensor_msgs::msg::LaserScan::ConstSharedPtr &msg3) const;
 
+  message_filters::Subscriber<cones_interfaces::msg::Cones> sub1_;
+  message_filters::Subscriber<sensor_msgs::msg::Image> sub2_;
+  message_filters::Subscriber<sensor_msgs::msg::LaserScan> sub3_;
 
-  rclcpp::Subscription<cones_interfaces::msg::Cones>::SharedPtr bboxes_sub_;
-  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
-  rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_sub_;
+  std::shared_ptr<approximate_synchronizer> my_sync_;
+
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr localization_sub_;
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_sub_;
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;

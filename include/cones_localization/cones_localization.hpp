@@ -44,11 +44,11 @@ public:
   ConesLocalization();
   int64_t foo(int64_t bar) const;
 
-  void lidarProcessing(const sensor_msgs::msg::LaserScan::SharedPtr msg,
+  void lidarProcessing(std::shared_ptr<const sensor_msgs::msg::LaserScan> msg,
                         float fx, float cx,
                         float camera_fov_horizontal, float image_height);
-  void bboxesProcessing(const cones_interfaces::msg::Cones::SharedPtr msg);
-  void imageProcessing(const sensor_msgs::msg::Image::SharedPtr msg);
+  void bboxesProcessing(std::shared_ptr<const cones_interfaces::msg::Cones> msg);
+  void imageProcessing(std::shared_ptr<const sensor_msgs::msg::Image>  msg);
   std::shared_ptr<nav_msgs::msg::OccupancyGrid> localizationProcessing(const geometry_msgs::msg::PoseStamped::SharedPtr msg,
                                                       const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map);
 

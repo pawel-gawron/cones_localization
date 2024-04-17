@@ -29,7 +29,7 @@ int64_t ConesLocalization::foo(int64_t bar) const
   return bar;
 }
 
-void ConesLocalization::lidarProcessing(const sensor_msgs::msg::LaserScan::SharedPtr msg,
+void ConesLocalization::lidarProcessing(std::shared_ptr<const sensor_msgs::msg::LaserScan> msg,
                                         float fx, float cx,
                                         float camera_fov_horizontal, float image_height)
   {
@@ -81,13 +81,13 @@ void ConesLocalization::lidarProcessing(const sensor_msgs::msg::LaserScan::Share
     }
   }
 
-void ConesLocalization::bboxesProcessing(const cones_interfaces::msg::Cones::SharedPtr msg)
+void ConesLocalization::bboxesProcessing(std::shared_ptr<const cones_interfaces::msg::Cones> msg)
 {
   cones_->header = msg->header;
   cones_->bboxes = msg->bboxes;
 }
 
-void ConesLocalization::imageProcessing(const sensor_msgs::msg::Image::SharedPtr msg)
+void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::Image>  msg)
 {
   cv::Mat frame_cv;
   frame_cv = cv_bridge::toCvCopy(msg, "bgr8")->image;
@@ -98,7 +98,7 @@ void ConesLocalization::imageProcessing(const sensor_msgs::msg::Image::SharedPtr
     return (bbox1.x2 - bbox1.x1) * (bbox1.y2 - bbox1.y1) > (bbox2.x2 - bbox2.x1) * (bbox2.y2 - bbox2.y1);
   });
 
-  int num_bboxes = std::min(static_cast<int>(cones_->bboxes.size()), 3);
+  int num_bboxes = std::min(static_cast<int>(cones_->bboxes.size()), 2);
 
   for (int i = 0; i < num_bboxes; ++i)
   {
@@ -107,7 +107,7 @@ void ConesLocalization::imageProcessing(const sensor_msgs::msg::Image::SharedPtr
 
     for (const auto& point : lidar_points_)
     {
-      if(std::get<0>(point) >= bbox.x1 && std::get<0>(point) <= bbox.x2)
+      if(std::get<0>(point) >= bbox.x1 - abs(bbox.x2 - bbox.x1) && std::get<0>(point) <= bbox.x2 + abs(bbox.x2 - bbox.x1))
       {
         cv::circle(frame_cv, cv::Point(std::get<0>(point), std::get<1>(point)), 2, cv::Scalar(0, 0, 255), -1);
         bboxes_points_.push_back(std::make_tuple(std::get<2>(point), std::get<3>(point)));
@@ -116,39 +116,31 @@ void ConesLocalization::imageProcessing(const sensor_msgs::msg::Image::SharedPtr
     if (!bboxes_points_.empty())
     {
       std::sort(bboxes_points_.begin(), bboxes_points_.end());
+      
+      float min_angle;
+      float min_distance;
 
-      float median_distance;
-      float median_angle;
-      if (bboxes_points_.size() % 2 == 0)
-      {
-        median_distance = (std::get<0>(bboxes_points_[bboxes_points_.size() / 2 - 1]) + std::get<0>(bboxes_points_[bboxes_points_.size() / 2])) / 2.0;
-        median_angle = (std::get<1>(bboxes_points_[bboxes_points_.size() / 2 - 1]) + std::get<1>(bboxes_points_[bboxes_points_.size() / 2])) / 2.0;
-      }
-      else
-      {
-        median_distance = std::get<0>(bboxes_points_[bboxes_points_.size() / 2]);
-        median_angle = std::get<1>(bboxes_points_[bboxes_points_.size() / 2]);
-      }
+      auto min_distance_it = std::min_element(bboxes_points_.begin(), bboxes_points_.end(),
+      [](const auto& a, const auto& b) { return std::get<0>(a) < std::get<0>(b); });
+      min_distance = std::get<0>(*min_distance_it);
+      min_angle = std::get<1>(*min_distance_it);
 
-      float rounded_median = std::round(median_distance * 100) / 100;
+      float rounded_min = std::round(min_distance * 100) / 100;
       std::stringstream ss;
-      ss << std::fixed << std::setprecision(2) << rounded_median;
+      ss << std::fixed << std::setprecision(2) << rounded_min;
       cv::putText(frame_cv, ss.str(), cv::Point(bbox.x2, bbox.y1), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
       
-      cones_distances_.push_back(std::make_tuple(rounded_median, median_angle));
+      cones_distances_.push_back(std::make_tuple(rounded_min, min_angle));
     }
-    cv::imshow("Cones from localization", frame_cv);
-    cv::waitKey(1);
   }
+  cv::imshow("Cones from localization", frame_cv);
+  cv::waitKey(1);
 }
 
 std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationProcessing(const geometry_msgs::msg::PoseStamped::SharedPtr msg,
                                                 const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map)
 {
-  std::cout << "Message data: " << msg->header.frame_id << std::endl;
-
   if (msg_map){
-    std::cout << "Message data: " << msg_map->header.stamp.sec << std::endl;
 
     nav_msgs::msg::OccupancyGrid::SharedPtr msg_map_copy = std::make_shared<nav_msgs::msg::OccupancyGrid>(*msg_map);
 
@@ -162,9 +154,6 @@ std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationPro
 
       unsigned int cone_grid_x = static_cast<unsigned int>((cone_x - msg_map_copy->info.origin.position.x) / msg_map_copy->info.resolution);
       unsigned int cone_grid_y = static_cast<unsigned int>((cone_y - msg_map_copy->info.origin.position.y) / msg_map_copy->info.resolution);
-
-      std::cout << "Cone grid x: " << cone_grid_x << std::endl;
-      std::cout << "Cone grid y: " << cone_grid_y << std::endl;
 
       int radius = 1;
       for (int i = -radius; i <= radius; ++i) {
