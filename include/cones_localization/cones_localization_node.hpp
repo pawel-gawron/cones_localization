@@ -73,7 +73,7 @@ private:
   float cy_;
 
   nav_msgs::msg::OccupancyGrid::SharedPtr map_msg_;
-  nav_msgs::msg::OccupancyGrid::SharedPtr map_msg_local_;
+  // const nav_msgs::msg::OccupancyGrid::SharedPtr map_msg_local_ = nullptr;
 
   cv::Mat camera_matrix_; // Macierz kamery
   cv::Mat distortion_coefficients_;
@@ -81,40 +81,28 @@ private:
   float angle_max_;
   float angle_min_;
 
-  std::queue<sensor_msgs::msg::LaserScan::SharedPtr> lidar_queue_;
-  std::queue<cones_interfaces::msg::Cones::SharedPtr> bboxes_queue_;
-  std::queue<sensor_msgs::msg::Image::SharedPtr> image_queue_;
-  std::queue<geometry_msgs::msg::PoseStamped::SharedPtr> localization_queue_;
-
-  rclcpp::TimerBase::SharedPtr timer_;
-
-  std::recursive_mutex lidar_queue_mutex_;
-  std::recursive_mutex bboxes_queue_mutex_;
-  std::recursive_mutex image_queue_mutex_;
-  std::recursive_mutex localization_queue_mutex_;
-
   typedef message_filters::sync_policies::ApproximateTime<cones_interfaces::msg::Cones,
                                                     sensor_msgs::msg::Image,
-                                                    sensor_msgs::msg::LaserScan> approximate_policy;
+                                                    sensor_msgs::msg::LaserScan,
+                                                    geometry_msgs::msg::PoseStamped> approximate_policy;
   typedef message_filters::Synchronizer<approximate_policy> approximate_synchronizer;
 
-  void localizationCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
   void cameraInfoCallback(const sensor_msgs::msg::CameraInfo::SharedPtr msg);
   void mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg);
-  void callbackSync(const cones_interfaces::msg::Cones::ConstSharedPtr &msg1,
-                    const sensor_msgs::msg::Image::ConstSharedPtr &msg2,
-                    const sensor_msgs::msg::LaserScan::ConstSharedPtr &msg3) const;
+  void callbackSync(const cones_interfaces::msg::Cones::ConstSharedPtr &bboxes_msg,
+                    const sensor_msgs::msg::Image::ConstSharedPtr &image_msg,
+                    const sensor_msgs::msg::LaserScan::ConstSharedPtr &lidar_msg,
+                    const geometry_msgs::msg::PoseStamped::ConstSharedPtr &loc_msg) const;
 
-  message_filters::Subscriber<cones_interfaces::msg::Cones> sub1_;
-  message_filters::Subscriber<sensor_msgs::msg::Image> sub2_;
-  message_filters::Subscriber<sensor_msgs::msg::LaserScan> sub3_;
+  message_filters::Subscriber<cones_interfaces::msg::Cones> bboxes_sub_;
+  message_filters::Subscriber<sensor_msgs::msg::Image> image_sub_;
+  message_filters::Subscriber<sensor_msgs::msg::LaserScan> lidar_sub_;
+  message_filters::Subscriber<geometry_msgs::msg::PoseStamped> localization_sub_;
 
   std::shared_ptr<approximate_synchronizer> my_sync_;
 
-  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr localization_sub_;
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_sub_;
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
-
   rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr map_pub_;
 
   rmw_qos_profile_t custom_qos_profile = rmw_qos_profile_default;

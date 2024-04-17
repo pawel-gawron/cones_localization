@@ -117,28 +117,36 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
     {
       std::sort(bboxes_points_.begin(), bboxes_points_.end());
       
-      float min_angle;
+      float median_angle;
       float min_distance;
 
       auto min_distance_it = std::min_element(bboxes_points_.begin(), bboxes_points_.end(),
       [](const auto& a, const auto& b) { return std::get<0>(a) < std::get<0>(b); });
       min_distance = std::get<0>(*min_distance_it);
-      min_angle = std::get<1>(*min_distance_it);
+
+      if (bboxes_points_.size() % 2 == 0)
+      {
+        median_angle = (std::get<1>(bboxes_points_[bboxes_points_.size() / 2 - 1]) + std::get<1>(bboxes_points_[bboxes_points_.size() / 2])) / 2.0;
+      }
+      else
+      {
+        median_angle = std::get<1>(bboxes_points_[bboxes_points_.size() / 2]);
+      }
 
       float rounded_min = std::round(min_distance * 100) / 100;
       std::stringstream ss;
       ss << std::fixed << std::setprecision(2) << rounded_min;
       cv::putText(frame_cv, ss.str(), cv::Point(bbox.x2, bbox.y1), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
       
-      cones_distances_.push_back(std::make_tuple(rounded_min, min_angle));
+      cones_distances_.push_back(std::make_tuple(rounded_min, median_angle));
     }
   }
   cv::imshow("Cones from localization", frame_cv);
   cv::waitKey(1);
 }
 
-std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationProcessing(const geometry_msgs::msg::PoseStamped::SharedPtr msg,
-                                                const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map)
+std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationProcessing(std::shared_ptr<const geometry_msgs::msg::PoseStamped> msg,
+                                                                                        const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map)
 {
   if (msg_map){
 

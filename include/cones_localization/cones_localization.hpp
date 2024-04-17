@@ -49,8 +49,8 @@ public:
                         float camera_fov_horizontal, float image_height);
   void bboxesProcessing(std::shared_ptr<const cones_interfaces::msg::Cones> msg);
   void imageProcessing(std::shared_ptr<const sensor_msgs::msg::Image>  msg);
-  std::shared_ptr<nav_msgs::msg::OccupancyGrid> localizationProcessing(const geometry_msgs::msg::PoseStamped::SharedPtr msg,
-                                                      const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map);
+  nav_msgs::msg::OccupancyGrid::SharedPtr localizationProcessing(std::shared_ptr<const geometry_msgs::msg::PoseStamped> msg,
+                                                                        const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map);
 
   std::unique_ptr<cones_interfaces::msg::Cones> cones_ = std::make_unique<cones_interfaces::msg::Cones>();
   std::vector<std::tuple<float, float>> bboxes_points_;

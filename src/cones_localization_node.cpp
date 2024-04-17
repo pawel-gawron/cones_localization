@@ -48,27 +48,24 @@ auto custom_qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
 using std::placeholders::_1;
 using std::placeholders::_2;
 using std::placeholders::_3;
+using std::placeholders::_4;
 
 ConesLocalizationNode::ConesLocalizationNode(const rclcpp::NodeOptions & options)
 :  Node("cones_localization", options)
 {
-  sub1_.subscribe(this, "/output_bboxes", rmw_qos_profile_sensor_data);
-  sub2_.subscribe(this, "/output_image", rmw_qos_profile_sensor_data);
-  sub3_.subscribe(this, "/sensing/lidar/scan", rmw_qos_profile_sensor_data);
+  bboxes_sub_.subscribe(this, "/output_bboxes", rmw_qos_profile_sensor_data);
+  image_sub_.subscribe(this, "/output_image", rmw_qos_profile_sensor_data);
+  lidar_sub_.subscribe(this, "/sensing/lidar/scan", rmw_qos_profile_sensor_data);
+  localization_sub_.subscribe(this, "/localization/cartographer/pose", rmw_qos_profile_sensor_data);
   
-  my_sync_ = std::make_shared<approximate_synchronizer>(approximate_policy(10), sub1_, sub2_, sub3_);
-  my_sync_->getPolicy()->setMaxIntervalDuration(rclcpp::Duration(20,0));
-  my_sync_->registerCallback(std::bind(&ConesLocalizationNode::callbackSync, this, _1, _2, _3));
+  my_sync_ = std::make_shared<approximate_synchronizer>(approximate_policy(5),
+                                                        bboxes_sub_, image_sub_, lidar_sub_, localization_sub_);
+  my_sync_->getPolicy()->setMaxIntervalDuration(rclcpp::Duration(10,0));
+  my_sync_->registerCallback(std::bind(&ConesLocalizationNode::callbackSync, this, _1, _2, _3, _4));
 
   cones_localization_ = std::make_unique<cones_localization::ConesLocalization>();
   param_name_ = this->declare_parameter("param_name", 456);
   cones_localization_->foo(param_name_);
-
-  localization_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
-  "/localization/cartographer/pose",
-  custom_qos,
-  std::bind(&ConesLocalizationNode::localizationCallback, this, 
-  std::placeholders::_1));
 
   camera_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
   "/sensing/camera/camera_info",
@@ -87,10 +84,12 @@ ConesLocalizationNode::ConesLocalizationNode(const rclcpp::NodeOptions & options
 
 void ConesLocalizationNode::callbackSync(const cones_interfaces::msg::Cones::ConstSharedPtr &bboxes_msg,
                                           const sensor_msgs::msg::Image::ConstSharedPtr &image_msg,
-                                          const sensor_msgs::msg::LaserScan::ConstSharedPtr &lidar_msg) const {
+                                          const sensor_msgs::msg::LaserScan::ConstSharedPtr &lidar_msg,
+                                          const geometry_msgs::msg::PoseStamped::ConstSharedPtr &loc_msg) const {
   RCLCPP_INFO(this->get_logger(), "Received synchronized messages:");
   RCLCPP_INFO(this->get_logger(), "Time difference between lidar and bbox: %f", abs((bboxes_msg->header.stamp.sec + bboxes_msg->header.stamp.nanosec * 1e-9) - (lidar_msg->header.stamp.sec + lidar_msg->header.stamp.nanosec * 1e-9)));
   RCLCPP_INFO(this->get_logger(), "Time difference between lidar and image: %f", abs((image_msg->header.stamp.sec + image_msg->header.stamp.nanosec * 1e-9) - (lidar_msg->header.stamp.sec + lidar_msg->header.stamp.nanosec * 1e-9)));
+  RCLCPP_INFO(this->get_logger(), "Time difference between lidar and image: %f", abs((loc_msg->header.stamp.sec + loc_msg->header.stamp.nanosec * 1e-9) - (lidar_msg->header.stamp.sec + lidar_msg->header.stamp.nanosec * 1e-9)));
   // RCLCPP_INFO(this->get_logger(), "  topic3: %u", lidar_msg->header.stamp.sec);
 
   cones_localization_->lidarProcessing(lidar_msg, fx_, cx_, camera_fov_horizontal_, image_height_);
@@ -99,10 +98,10 @@ void ConesLocalizationNode::callbackSync(const cones_interfaces::msg::Cones::Con
 
   cones_localization_->imageProcessing(image_msg);
 
-  // map_msg_local_ = cones_localization_->localizationProcessing(localization_msg, map_msg_);
+  nav_msgs::msg::OccupancyGrid::ConstSharedPtr map_msg_local = cones_localization_->localizationProcessing(loc_msg, map_msg_);
 
-  if (map_msg_local_ != nullptr){
-  map_pub_->publish(*map_msg_local_); 
+  if (map_msg_local != nullptr){
+  map_pub_->publish(*map_msg_local); 
   }
 }
 
@@ -139,15 +138,6 @@ void ConesLocalizationNode::cameraInfoCallback(const sensor_msgs::msg::CameraInf
 
       executed_camera_info_ = true;
     }
-}
-
-void ConesLocalizationNode::localizationCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
-{
-  std::lock_guard<std::recursive_mutex> loc_lock(localization_queue_mutex_);
-  if (localization_queue_.size() >= 10) {
-    localization_queue_.pop();
-  }
-  localization_queue_.push(msg);
 }
 
 void ConesLocalizationNode::mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
