@@ -14,30 +14,14 @@
 
 #include "cones_localization/cones_localization_node.hpp"
 
-template <typename T>
-T findClosestMessage(std::queue<T> &queue, float target_time) {
-    T closest_msg; 
-    float min_diff = std::numeric_limits<float>::max();
+geometry_msgs::msg::Pose transform_pose(const geometry_msgs::msg::Pose& pose, const geometry_msgs::msg::TransformStamped& transform)
+{
+  geometry_msgs::msg::PoseStamped transformed_pose;
+  geometry_msgs::msg::PoseStamped orig_pose;
+  orig_pose.pose = pose;
+  tf2::doTransform(orig_pose, transformed_pose, transform);
 
-    int i = 0;
-
-    std::queue<T> queue_copy = queue;
-
-    while (!queue_copy.empty()) {
-        auto msg = queue_copy.front();
-        float msg_time = msg->header.stamp.sec + msg->header.stamp.nanosec * 1e-9;
-        float diff = std::abs(msg_time - target_time);
-        i++;
-
-        if (diff < min_diff) {
-            min_diff = diff;
-            closest_msg = msg;
-        }
-
-        queue_copy.pop();
-    }
-    // std::cout << "Minimum difference: " << min_diff << ", " << i << std::endl;
-    return closest_msg;
+  return transformed_pose.pose;
 }
 
 namespace cones_localization
@@ -53,6 +37,11 @@ using std::placeholders::_4;
 ConesLocalizationNode::ConesLocalizationNode(const rclcpp::NodeOptions & options)
 :  Node("cones_localization", options)
 {
+  tf_buffer_ = std::make_shared<tf2_ros::Buffer>(get_clock());
+  tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
+  cones_number_map_ = declare_parameter<int>("cones_number_map");
+
   bboxes_sub_.subscribe(this, "/output_bboxes", rmw_qos_profile_sensor_data);
   image_sub_.subscribe(this, "/output_image", rmw_qos_profile_sensor_data);
   lidar_sub_.subscribe(this, "/sensing/lidar/scan", rmw_qos_profile_sensor_data);
@@ -66,6 +55,8 @@ ConesLocalizationNode::ConesLocalizationNode(const rclcpp::NodeOptions & options
   cones_localization_ = std::make_unique<cones_localization::ConesLocalization>();
   param_name_ = this->declare_parameter("param_name", 456);
   cones_localization_->foo(param_name_);
+
+  cones_localization_->setConfig(cones_number_map_);
 
   camera_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
   "/sensing/camera/camera_info",
@@ -86,11 +77,10 @@ void ConesLocalizationNode::callbackSync(const cones_interfaces::msg::Cones::Con
                                           const sensor_msgs::msg::Image::ConstSharedPtr &image_msg,
                                           const sensor_msgs::msg::LaserScan::ConstSharedPtr &lidar_msg,
                                           const geometry_msgs::msg::PoseStamped::ConstSharedPtr &loc_msg) const {
-  RCLCPP_INFO(this->get_logger(), "Received synchronized messages:");
-  RCLCPP_INFO(this->get_logger(), "Time difference between lidar and bbox: %f", abs((bboxes_msg->header.stamp.sec + bboxes_msg->header.stamp.nanosec * 1e-9) - (lidar_msg->header.stamp.sec + lidar_msg->header.stamp.nanosec * 1e-9)));
-  RCLCPP_INFO(this->get_logger(), "Time difference between lidar and image: %f", abs((image_msg->header.stamp.sec + image_msg->header.stamp.nanosec * 1e-9) - (lidar_msg->header.stamp.sec + lidar_msg->header.stamp.nanosec * 1e-9)));
-  RCLCPP_INFO(this->get_logger(), "Time difference between lidar and image: %f", abs((loc_msg->header.stamp.sec + loc_msg->header.stamp.nanosec * 1e-9) - (lidar_msg->header.stamp.sec + lidar_msg->header.stamp.nanosec * 1e-9)));
-  // RCLCPP_INFO(this->get_logger(), "  topic3: %u", lidar_msg->header.stamp.sec);
+  // RCLCPP_INFO(this->get_logger(), "Received synchronized messages:");
+  // RCLCPP_INFO(this->get_logger(), "Time difference between lidar and bbox: %f", abs((bboxes_msg->header.stamp.sec + bboxes_msg->header.stamp.nanosec * 1e-9) - (lidar_msg->header.stamp.sec + lidar_msg->header.stamp.nanosec * 1e-9)));
+  // RCLCPP_INFO(this->get_logger(), "Time difference between lidar and image: %f", abs((image_msg->header.stamp.sec + image_msg->header.stamp.nanosec * 1e-9) - (lidar_msg->header.stamp.sec + lidar_msg->header.stamp.nanosec * 1e-9)));
+  // RCLCPP_INFO(this->get_logger(), "Time difference between lidar and image: %f", abs((loc_msg->header.stamp.sec + loc_msg->header.stamp.nanosec * 1e-9) - (lidar_msg->header.stamp.sec + lidar_msg->header.stamp.nanosec * 1e-9)));
 
   cones_localization_->lidarProcessing(lidar_msg, fx_, cx_, camera_fov_horizontal_, image_height_);
 
@@ -98,13 +88,28 @@ void ConesLocalizationNode::callbackSync(const cones_interfaces::msg::Cones::Con
 
   cones_localization_->imageProcessing(image_msg);
 
-  nav_msgs::msg::OccupancyGrid::ConstSharedPtr map_msg_local = cones_localization_->localizationProcessing(loc_msg, map_msg_);
+  if (map_msg_ && loc_msg)
+  {
+    double car_yaw;
+    tf2::Quaternion car_orientation(loc_msg->pose.orientation.x, loc_msg->pose.orientation.y, loc_msg->pose.orientation.z, loc_msg->pose.orientation.w);
+    tf2::Matrix3x3 matrix(car_orientation);
+    double roll, pitch;
+    matrix.getRPY(roll, pitch, car_yaw); 
 
-  if (map_msg_local != nullptr){
-  map_pub_->publish(*map_msg_local); 
+    const auto current_pose_in_costmap_frame = transform_pose(
+    loc_msg->pose,
+    get_transform(map_msg_->header.frame_id,
+                  loc_msg->header.frame_id));
+
+    // RCLCPP_INFO(this->get_logger(), "Current pose in costmap frame: %f %f",
+    //             current_pose_in_costmap_frame.position.x,
+    //             current_pose_in_costmap_frame.position.y);
+
+    nav_msgs::msg::OccupancyGrid::ConstSharedPtr map_msg_local = cones_localization_->localizationProcessing(current_pose_in_costmap_frame, map_msg_, car_yaw);
+
+    map_pub_->publish(*map_msg_local);
   }
 }
-
 
 void ConesLocalizationNode::cameraInfoCallback(const sensor_msgs::msg::CameraInfo::SharedPtr msg)
 {
@@ -142,7 +147,25 @@ void ConesLocalizationNode::cameraInfoCallback(const sensor_msgs::msg::CameraInf
 
 void ConesLocalizationNode::mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
 {
-  map_msg_ = msg;
+  if(!executed_map_)
+  {
+    map_msg_ = msg;
+    executed_map_ = true;
+  }
+}
+
+geometry_msgs::msg::TransformStamped ConesLocalizationNode::get_transform(
+  const std::string& from,
+  const std::string& to) const
+{
+  geometry_msgs::msg::TransformStamped tf;
+  try {
+    tf =
+      tf_buffer_->lookupTransform(from, to, rclcpp::Time(0), rclcpp::Duration::from_seconds(1.0));
+  } catch (const tf2::TransformException & ex) {
+    RCLCPP_ERROR(this->get_logger(), "%s", ex.what());
+  }
+  return tf;
 }
 
 }  // namespace cones_localization

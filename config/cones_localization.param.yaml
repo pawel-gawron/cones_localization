@@ -1,3 +1,4 @@
 /**:
   ros__parameters:
     param_name: 789
+    cones_number_map: 1

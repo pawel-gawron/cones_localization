@@ -98,7 +98,7 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
     return (bbox1.x2 - bbox1.x1) * (bbox1.y2 - bbox1.y1) > (bbox2.x2 - bbox2.x1) * (bbox2.y2 - bbox2.y1);
   });
 
-  int num_bboxes = std::min(static_cast<int>(cones_->bboxes.size()), 2);
+  int num_bboxes = std::min(static_cast<int>(cones_->bboxes.size()), cones_number_map_);
 
   for (int i = 0; i < num_bboxes; ++i)
   {
@@ -138,47 +138,60 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
       ss << std::fixed << std::setprecision(2) << rounded_min;
       cv::putText(frame_cv, ss.str(), cv::Point(bbox.x2, bbox.y1), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
       
-      cones_distances_.push_back(std::make_tuple(rounded_min, median_angle));
+      cones_distances_.push_back(std::make_tuple(min_distance, median_angle));
     }
   }
   cv::imshow("Cones from localization", frame_cv);
   cv::waitKey(1);
 }
 
-std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationProcessing(std::shared_ptr<const geometry_msgs::msg::PoseStamped> msg,
-                                                                                        const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map)
+std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationProcessing(geometry_msgs::msg::Pose msg,
+                                                                                        const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map,
+                                                                                        double car_yaw)
 {
-  if (msg_map){
+  if (!msg_map) { return msg_map; } 
 
-    nav_msgs::msg::OccupancyGrid::SharedPtr msg_map_copy = std::make_shared<nav_msgs::msg::OccupancyGrid>(*msg_map);
+  std_msgs::msg::Header header;
+  header.stamp = rclcpp::Clock(RCL_ROS_TIME).now();
+  header.frame_id = msg_map->header.frame_id;
 
-    for (const auto& cone : cones_distances_)
-    {
-      float distance = std::get<0>(cone);
-      float angle = std::get<1>(cone);
+  nav_msgs::msg::OccupancyGrid::SharedPtr msg_map_copy = std::make_shared<nav_msgs::msg::OccupancyGrid>(*msg_map);
 
-      float cone_x = msg->pose.position.x + distance * cos(angle);
-      float cone_y = msg->pose.position.y + distance * sin(angle);
+  msg_map_copy->header = header;
 
-      unsigned int cone_grid_x = static_cast<unsigned int>((cone_x - msg_map_copy->info.origin.position.x) / msg_map_copy->info.resolution);
-      unsigned int cone_grid_y = static_cast<unsigned int>((cone_y - msg_map_copy->info.origin.position.y) / msg_map_copy->info.resolution);
+  for (const auto& cone : cones_distances_)
+  {
+    float distance = std::get<0>(cone);
+    float angle = std::get<1>(cone);
 
-      int radius = 1;
-      for (int i = -radius; i <= radius; ++i) {
-        for (int j = -radius; j <= radius; ++j) {
-          unsigned int grid_x = cone_grid_x + i;
-          unsigned int grid_y = cone_grid_y + j;
+    // std::cout << "Distance: " << distance << " Angle: " << angle << std::endl;
 
-          if (grid_x < msg_map_copy->info.width && grid_y < msg_map_copy->info.height) {
-              int index = grid_y * msg_map_copy->info.width + grid_x;
-              msg_map_copy->data[index] = 100;
-          }
+    float cone_x = msg.position.x + (distance * cos(car_yaw - angle));
+    float cone_y = msg.position.y + (distance * sin(car_yaw - angle));
+
+    // std::cout << "msg.position.x: " << msg.position.x << " msg.position.y: " << msg.position.y << std::endl;
+    // std::cout << "cone_x: " << cone_x << " cone_y: " << cone_y << std::endl;
+
+    int radius = 1;
+    for (int i = -radius; i <= radius; ++i) {
+      for (int j = -radius; j <= radius; ++j) {
+        unsigned int grid_x = (cone_x - msg_map_copy->info.origin.position.x) / msg_map_copy->info.resolution;
+        unsigned int grid_y = (cone_y - msg_map_copy->info.origin.position.y) / msg_map_copy->info.resolution;
+
+        if (grid_x + j < msg_map_copy->info.width &&
+            grid_y + i < msg_map_copy->info.height){
+          int index = (grid_y + i) * msg_map_copy->info.width + (grid_x + j);
+          msg_map_copy->data[index] = 100;
         }
       }
     }
-    return msg_map_copy;
   }
-  return msg_map;
+  return msg_map_copy;
+}
+
+void ConesLocalization::setConfig(int conesNumberMap)
+{
+  cones_number_map_ = conesNumberMap;
 }
 
 }  // namespace cones_localization

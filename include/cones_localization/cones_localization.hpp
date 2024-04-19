@@ -15,6 +15,8 @@
 #ifndef CONES_LOCALIZATION__CONES_LOCALIZATION_HPP_
 #define CONES_LOCALIZATION__CONES_LOCALIZATION_HPP_
 
+#include <rclcpp/rclcpp.hpp>
+#include "rclcpp/time.hpp"
 #include <cstdint>
 #include <cmath>
 #include <cv_bridge/cv_bridge.h>
@@ -49,16 +51,20 @@ public:
                         float camera_fov_horizontal, float image_height);
   void bboxesProcessing(std::shared_ptr<const cones_interfaces::msg::Cones> msg);
   void imageProcessing(std::shared_ptr<const sensor_msgs::msg::Image>  msg);
-  nav_msgs::msg::OccupancyGrid::SharedPtr localizationProcessing(std::shared_ptr<const geometry_msgs::msg::PoseStamped> msg,
-                                                                        const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map);
+  nav_msgs::msg::OccupancyGrid::SharedPtr localizationProcessing(geometry_msgs::msg::Pose msg,
+                                                                  const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map,
+                                                                  double car_yaw);
 
   std::unique_ptr<cones_interfaces::msg::Cones> cones_ = std::make_unique<cones_interfaces::msg::Cones>();
   std::vector<std::tuple<float, float>> bboxes_points_;
+
+  void setConfig(int conesNumberMap);
 
 private:
   std::vector<std::tuple<float, float, float, float>> lidar_points_;
   float max_range_;
   std::vector<std::tuple<float, float>> cones_distances_;
+  int cones_number_map_;
 };
 
 }  // namespace cones_localization

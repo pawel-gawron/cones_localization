@@ -37,6 +37,12 @@
 #include <nav_msgs/msg/occupancy_grid.hpp>
 
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/pose.hpp>
+// #include <geometry_msgs/msg/transform_stamped.hpp>
+
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 
 #include "cones_localization/cones_localization.hpp"
 #include "cones_interfaces/msg/bounding_box.hpp" 
@@ -72,14 +78,20 @@ private:
   float fy_;
   float cy_;
 
+  int cones_number_map_;
+
   nav_msgs::msg::OccupancyGrid::SharedPtr map_msg_;
-  // const nav_msgs::msg::OccupancyGrid::SharedPtr map_msg_local_ = nullptr;
+
+  std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
   cv::Mat camera_matrix_; // Macierz kamery
   cv::Mat distortion_coefficients_;
 
   float angle_max_;
   float angle_min_;
+
+  geometry_msgs::msg::TransformStamped get_transform(const std::string& from, const std::string& to) const;
 
   typedef message_filters::sync_policies::ApproximateTime<cones_interfaces::msg::Cones,
                                                     sensor_msgs::msg::Image,
