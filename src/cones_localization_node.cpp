@@ -76,25 +76,35 @@ ConesLocalizationNode::ConesLocalizationNode(const rclcpp::NodeOptions & options
 void ConesLocalizationNode::callbackSync(const cones_interfaces::msg::Cones::ConstSharedPtr &bboxes_msg,
                                           const sensor_msgs::msg::Image::ConstSharedPtr &image_msg,
                                           const sensor_msgs::msg::LaserScan::ConstSharedPtr &lidar_msg,
-                                          const geometry_msgs::msg::PoseStamped::ConstSharedPtr &loc_msg) const {
+                                          const geometry_msgs::msg::PoseStamped::ConstSharedPtr &loc_msg) {
   // RCLCPP_INFO(this->get_logger(), "Received synchronized messages:");
   // RCLCPP_INFO(this->get_logger(), "Time difference between lidar and bbox: %f", abs((bboxes_msg->header.stamp.sec + bboxes_msg->header.stamp.nanosec * 1e-9) - (lidar_msg->header.stamp.sec + lidar_msg->header.stamp.nanosec * 1e-9)));
   // RCLCPP_INFO(this->get_logger(), "Time difference between lidar and image: %f", abs((image_msg->header.stamp.sec + image_msg->header.stamp.nanosec * 1e-9) - (lidar_msg->header.stamp.sec + lidar_msg->header.stamp.nanosec * 1e-9)));
   // RCLCPP_INFO(this->get_logger(), "Time difference between lidar and image: %f", abs((loc_msg->header.stamp.sec + loc_msg->header.stamp.nanosec * 1e-9) - (lidar_msg->header.stamp.sec + lidar_msg->header.stamp.nanosec * 1e-9)));
 
-  cones_localization_->lidarProcessing(lidar_msg, fx_, cx_, camera_fov_horizontal_, image_height_);
-
-  cones_localization_->bboxesProcessing(bboxes_msg);
-
-  cones_localization_->imageProcessing(image_msg);
-
   if (map_msg_ && loc_msg)
   {
+    float current_time = lidar_msg->header.stamp.sec + lidar_msg->header.stamp.nanosec * 1e-9;
+    float time_difference = current_time - previous_time_;
+
+    cones_localization_->lidarProcessing(lidar_msg, fx_, cx_, camera_fov_horizontal_, image_height_, car_yaw_velocity_);
+    cones_localization_->bboxesProcessing(bboxes_msg);
+    cones_localization_->imageProcessing(image_msg);
+
     double car_yaw;
-    tf2::Quaternion car_orientation(loc_msg->pose.orientation.x, loc_msg->pose.orientation.y, loc_msg->pose.orientation.z, loc_msg->pose.orientation.w);
+    tf2::Quaternion car_orientation(loc_msg->pose.orientation.x,
+                                    loc_msg->pose.orientation.y,
+                                    loc_msg->pose.orientation.z,
+                                    loc_msg->pose.orientation.w);
     tf2::Matrix3x3 matrix(car_orientation);
     double roll, pitch;
-    matrix.getRPY(roll, pitch, car_yaw); 
+    matrix.getRPY(roll, pitch, car_yaw);
+
+    float delta_yaw = car_yaw - previous_car_yaw_; 
+    car_yaw_velocity_ = delta_yaw / time_difference;
+
+    previous_car_yaw_ = car_yaw;
+    previous_time_ = current_time;
 
     const auto current_pose_in_costmap_frame = transform_pose(
     loc_msg->pose,
@@ -156,7 +166,7 @@ void ConesLocalizationNode::mapCallback(const nav_msgs::msg::OccupancyGrid::Shar
 
 geometry_msgs::msg::TransformStamped ConesLocalizationNode::get_transform(
   const std::string& from,
-  const std::string& to) const
+  const std::string& to)
 {
   geometry_msgs::msg::TransformStamped tf;
   try {

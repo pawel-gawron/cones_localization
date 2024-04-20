@@ -31,55 +31,59 @@ int64_t ConesLocalization::foo(int64_t bar) const
 
 void ConesLocalization::lidarProcessing(std::shared_ptr<const sensor_msgs::msg::LaserScan> msg,
                                         float fx, float cx,
-                                        float camera_fov_horizontal, float image_height)
-  {
-    lidar_points_.clear();
+                                        float camera_fov_horizontal, float image_height,
+                                        float car_yaw_velocity)
+{
+  lidar_points_.clear();
 
-    float min_angle = msg->angle_min;
-    float max_angle = msg->angle_max;
-    float angle_increment = msg->angle_increment;
+  float min_angle = msg->angle_min;
+  float max_angle = msg->angle_max;
+  float angle_increment = msg->angle_increment;
 
-    uint32_t ranges_size = std::ceil(
-      (max_angle - min_angle) / angle_increment);
+  uint32_t ranges_size = std::ceil(
+    (max_angle - min_angle) / angle_increment);
 
-    // float lidar_fov = max_angle - min_angle; 
+  // float lidar_fov = max_angle - min_angle; 
 
-    std::vector<float> ranges = msg->ranges;
+  std::vector<float> ranges = msg->ranges;
 
-    const float camera_offset = 0.1;
-    max_range_ = msg->range_max;
-    int y_pixel;
-    int x_pixel;
-    float x_camera;
-    // float normalized_angle;
-    float alpha;
-    float angle;
-    float distance;
+  const float camera_offset = 0.1;
+  max_range_ = msg->range_max;
+  int y_pixel;
+  int x_pixel;
+  float x_camera;
+  // float normalized_angle;
+  float alpha;
+  float angle;
+  float distance;
 
-    for (uint32_t i = 0; i < ranges_size; ++i)
-    { 
-      angle = max_angle - i * angle_increment;    
-      distance = ranges[i];
+  for (uint32_t i = 0; i < ranges_size; ++i)
+  { 
+    angle = max_angle - i * angle_increment;    
+    distance = ranges[i];
 
-      // Check if point is within camera FOV 
-      if (angle >= min_angle && angle <= max_angle && angle <= camera_fov_horizontal/2 && angle >= -camera_fov_horizontal/2)
-      {
-          x_camera = tan(angle);
-          x_pixel = static_cast<int>(fx * x_camera + cx);
+    // Check if point is within camera FOV 
+    if (angle >= min_angle && angle <= max_angle && angle <= camera_fov_horizontal/2 && angle >= -camera_fov_horizontal/2)
+    {
 
-          if (distance >= max_range_) {
-              y_pixel = image_height / 2;
-              continue;
-          }
+        float angular_displacement = car_yaw_velocity * 0.2;
+        angle = angle - angular_displacement;
+        x_camera = sin(angle);
+        x_pixel = static_cast<int>(fx * x_camera + cx);
 
-          alpha = atan(distance / camera_offset);
+        if (distance >= max_range_) {
+            y_pixel = image_height / 2;
+            continue;
+        }
 
-          y_pixel = static_cast<int>((alpha/(0.5 * M_PI)) * image_height/2);
+        alpha = atan(distance / camera_offset);
 
-          lidar_points_.emplace_back(x_pixel, y_pixel, distance, angle);
-      }  
-    }
+        y_pixel = static_cast<int>((alpha/(0.5 * M_PI)) * image_height/2);
+
+        lidar_points_.emplace_back(x_pixel, y_pixel, distance, angle);
+    }  
   }
+}
 
 void ConesLocalization::bboxesProcessing(std::shared_ptr<const cones_interfaces::msg::Cones> msg)
 {
@@ -87,7 +91,7 @@ void ConesLocalization::bboxesProcessing(std::shared_ptr<const cones_interfaces:
   cones_->bboxes = msg->bboxes;
 }
 
-void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::Image>  msg)
+void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::Image> msg)
 {
   cv::Mat frame_cv;
   frame_cv = cv_bridge::toCvCopy(msg, "bgr8")->image;
@@ -107,9 +111,12 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
 
     for (const auto& point : lidar_points_)
     {
-      if(std::get<0>(point) >= bbox.x1 - abs(bbox.x2 - bbox.x1) && std::get<0>(point) <= bbox.x2 + abs(bbox.x2 - bbox.x1))
+      int x = std::get<0>(point);
+      int y = std::get<1>(point);
+      
+      if(x >= bbox.x1 - abs(bbox.x2 - bbox.x1) && x <= bbox.x2 + abs(bbox.x2 - bbox.x1))
       {
-        cv::circle(frame_cv, cv::Point(std::get<0>(point), std::get<1>(point)), 2, cv::Scalar(0, 0, 255), -1);
+        cv::circle(frame_cv, cv::Point(x, y), 2, cv::Scalar(0, 0, 255), -1);
         bboxes_points_.push_back(std::make_tuple(std::get<2>(point), std::get<3>(point)));
       }
     }

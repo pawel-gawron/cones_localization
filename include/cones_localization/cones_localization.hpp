@@ -48,9 +48,11 @@ public:
 
   void lidarProcessing(std::shared_ptr<const sensor_msgs::msg::LaserScan> msg,
                         float fx, float cx,
-                        float camera_fov_horizontal, float image_height);
+                        float camera_fov_horizontal,
+                        float image_height,
+                        float car_yaw_velocity);
   void bboxesProcessing(std::shared_ptr<const cones_interfaces::msg::Cones> msg);
-  void imageProcessing(std::shared_ptr<const sensor_msgs::msg::Image>  msg);
+  void imageProcessing(std::shared_ptr<const sensor_msgs::msg::Image> msg);
   nav_msgs::msg::OccupancyGrid::SharedPtr localizationProcessing(geometry_msgs::msg::Pose msg,
                                                                   const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map,
                                                                   double car_yaw);

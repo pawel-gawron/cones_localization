@@ -77,6 +77,9 @@ private:
   float cx_;
   float fy_;
   float cy_;
+  float previous_car_yaw_ = 0.0;
+  float previous_time_ = 0.0;
+  float car_yaw_velocity_ = 0.0;
 
   int cones_number_map_;
 
@@ -91,7 +94,7 @@ private:
   float angle_max_;
   float angle_min_;
 
-  geometry_msgs::msg::TransformStamped get_transform(const std::string& from, const std::string& to) const;
+  geometry_msgs::msg::TransformStamped get_transform(const std::string& from, const std::string& to);
 
   typedef message_filters::sync_policies::ApproximateTime<cones_interfaces::msg::Cones,
                                                     sensor_msgs::msg::Image,
@@ -104,7 +107,7 @@ private:
   void callbackSync(const cones_interfaces::msg::Cones::ConstSharedPtr &bboxes_msg,
                     const sensor_msgs::msg::Image::ConstSharedPtr &image_msg,
                     const sensor_msgs::msg::LaserScan::ConstSharedPtr &lidar_msg,
-                    const geometry_msgs::msg::PoseStamped::ConstSharedPtr &loc_msg) const;
+                    const geometry_msgs::msg::PoseStamped::ConstSharedPtr &loc_msg);
 
   message_filters::Subscriber<cones_interfaces::msg::Cones> bboxes_sub_;
   message_filters::Subscriber<sensor_msgs::msg::Image> image_sub_;
