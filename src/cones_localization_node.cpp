@@ -41,6 +41,7 @@ ConesLocalizationNode::ConesLocalizationNode(const rclcpp::NodeOptions & options
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
   cones_number_map_ = declare_parameter<int>("cones_number_map");
+  cones_shift_factor_ = declare_parameter<float>("cones_shift_factor");
 
   bboxes_sub_.subscribe(this, "/output_bboxes", rmw_qos_profile_sensor_data);
   image_sub_.subscribe(this, "/output_image", rmw_qos_profile_sensor_data);
@@ -53,10 +54,9 @@ ConesLocalizationNode::ConesLocalizationNode(const rclcpp::NodeOptions & options
   my_sync_->registerCallback(std::bind(&ConesLocalizationNode::callbackSync, this, _1, _2, _3, _4));
 
   cones_localization_ = std::make_unique<cones_localization::ConesLocalization>();
-  param_name_ = this->declare_parameter("param_name", 456);
-  cones_localization_->foo(param_name_);
 
-  cones_localization_->setConfig(cones_number_map_);
+  cones_localization_->setConfig(cones_number_map_,
+                                  cones_shift_factor_);
 
   camera_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
   "/sensing/camera/camera_info",
@@ -84,13 +84,6 @@ void ConesLocalizationNode::callbackSync(const cones_interfaces::msg::Cones::Con
 
   if (map_msg_ && loc_msg)
   {
-    float current_time = lidar_msg->header.stamp.sec + lidar_msg->header.stamp.nanosec * 1e-9;
-    float time_difference = current_time - previous_time_;
-
-    cones_localization_->lidarProcessing(lidar_msg, fx_, cx_, camera_fov_horizontal_, image_height_, car_yaw_velocity_);
-    cones_localization_->bboxesProcessing(bboxes_msg);
-    cones_localization_->imageProcessing(image_msg);
-
     double car_yaw;
     tf2::Quaternion car_orientation(loc_msg->pose.orientation.x,
                                     loc_msg->pose.orientation.y,
@@ -101,15 +94,17 @@ void ConesLocalizationNode::callbackSync(const cones_interfaces::msg::Cones::Con
     matrix.getRPY(roll, pitch, car_yaw);
 
     float delta_yaw = car_yaw - previous_car_yaw_; 
-    car_yaw_velocity_ = delta_yaw / time_difference;
 
     previous_car_yaw_ = car_yaw;
-    previous_time_ = current_time;
 
     const auto current_pose_in_costmap_frame = transform_pose(
     loc_msg->pose,
     get_transform(map_msg_->header.frame_id,
                   loc_msg->header.frame_id));
+
+    cones_localization_->lidarProcessing(lidar_msg, fx_, cx_, camera_fov_horizontal_, image_height_, delta_yaw);
+    cones_localization_->bboxesProcessing(bboxes_msg);
+    cones_localization_->imageProcessing(image_msg);
 
     // RCLCPP_INFO(this->get_logger(), "Current pose in costmap frame: %f %f",
     //             current_pose_in_costmap_frame.position.x,

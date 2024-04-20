@@ -23,12 +23,6 @@ ConesLocalization::ConesLocalization()
 {
 }
 
-int64_t ConesLocalization::foo(int64_t bar) const
-{
-  std::cout << "Hello World, " << bar << std::endl;
-  return bar;
-}
-
 void ConesLocalization::lidarProcessing(std::shared_ptr<const sensor_msgs::msg::LaserScan> msg,
                                         float fx, float cx,
                                         float camera_fov_horizontal, float image_height,
@@ -65,10 +59,10 @@ void ConesLocalization::lidarProcessing(std::shared_ptr<const sensor_msgs::msg::
     // Check if point is within camera FOV 
     if (angle >= min_angle && angle <= max_angle && angle <= camera_fov_horizontal/2 && angle >= -camera_fov_horizontal/2)
     {
-
-        float angular_displacement = car_yaw_velocity * 0.2;
+        float angular_displacement = sin(car_yaw_velocity) * cones_shift_factor_;
         angle = angle - angular_displacement;
-        x_camera = sin(angle);
+
+        x_camera = tan(angle);
         x_pixel = static_cast<int>(fx * x_camera + cx);
 
         if (distance >= max_range_) {
@@ -113,8 +107,9 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
     {
       int x = std::get<0>(point);
       int y = std::get<1>(point);
+      int bbox_width = abs(bbox.x2 - bbox.x1);
       
-      if(x >= bbox.x1 - abs(bbox.x2 - bbox.x1) && x <= bbox.x2 + abs(bbox.x2 - bbox.x1))
+      if(x >= bbox.x1 - bbox_width / 2 && x <= bbox.x2 + bbox_width / 2)
       {
         cv::circle(frame_cv, cv::Point(x, y), 2, cv::Scalar(0, 0, 255), -1);
         bboxes_points_.push_back(std::make_tuple(std::get<2>(point), std::get<3>(point)));
@@ -130,15 +125,7 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
       auto min_distance_it = std::min_element(bboxes_points_.begin(), bboxes_points_.end(),
       [](const auto& a, const auto& b) { return std::get<0>(a) < std::get<0>(b); });
       min_distance = std::get<0>(*min_distance_it);
-
-      if (bboxes_points_.size() % 2 == 0)
-      {
-        median_angle = (std::get<1>(bboxes_points_[bboxes_points_.size() / 2 - 1]) + std::get<1>(bboxes_points_[bboxes_points_.size() / 2])) / 2.0;
-      }
-      else
-      {
-        median_angle = std::get<1>(bboxes_points_[bboxes_points_.size() / 2]);
-      }
+      median_angle = std::get<1>(*min_distance_it);
 
       float rounded_min = std::round(min_distance * 100) / 100;
       std::stringstream ss;
@@ -196,9 +183,11 @@ std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationPro
   return msg_map_copy;
 }
 
-void ConesLocalization::setConfig(int conesNumberMap)
+void ConesLocalization::setConfig(int conesNumberMap,
+                                  float conesShiftFactor)
 {
   cones_number_map_ = conesNumberMap;
+  cones_shift_factor_ = conesShiftFactor;
 }
 
 }  // namespace cones_localization

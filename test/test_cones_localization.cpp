@@ -14,10 +14,3 @@
 
 #include "gtest/gtest.h"
 #include "cones_localization/cones_localization.hpp"
-
-TEST(TestConesLocalization, TestHello) {
-  std::unique_ptr<cones_localization::ConesLocalization> cones_localization_ =
-    std::make_unique<cones_localization::ConesLocalization>();
-  auto result = cones_localization_->foo(999);
-  EXPECT_EQ(result, 999);
-}

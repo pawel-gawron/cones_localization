@@ -1,4 +1,4 @@
 /**:
   ros__parameters:
-    param_name: 789
     cones_number_map: 1
+    cones_shift_factor: 2.5

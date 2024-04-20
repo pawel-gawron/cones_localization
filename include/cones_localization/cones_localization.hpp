@@ -44,7 +44,6 @@ class CONES_LOCALIZATION_PUBLIC ConesLocalization
 {
 public:
   ConesLocalization();
-  int64_t foo(int64_t bar) const;
 
   void lidarProcessing(std::shared_ptr<const sensor_msgs::msg::LaserScan> msg,
                         float fx, float cx,
@@ -60,13 +59,15 @@ public:
   std::unique_ptr<cones_interfaces::msg::Cones> cones_ = std::make_unique<cones_interfaces::msg::Cones>();
   std::vector<std::tuple<float, float>> bboxes_points_;
 
-  void setConfig(int conesNumberMap);
+  void setConfig(int conesNumberMap,
+                  float conesShiftFactor);
 
 private:
   std::vector<std::tuple<float, float, float, float>> lidar_points_;
   float max_range_;
   std::vector<std::tuple<float, float>> cones_distances_;
   int cones_number_map_;
+  float cones_shift_factor_;
 };
 
 }  // namespace cones_localization

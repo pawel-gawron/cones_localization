@@ -82,6 +82,7 @@ private:
   float car_yaw_velocity_ = 0.0;
 
   int cones_number_map_;
+  float cones_shift_factor_;
 
   nav_msgs::msg::OccupancyGrid::SharedPtr map_msg_;
 
