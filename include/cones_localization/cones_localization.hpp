@@ -65,7 +65,7 @@ public:
 private:
   std::vector<std::tuple<float, float, float, float>> lidar_points_;
   float max_range_;
-  std::vector<std::tuple<float, float>> cones_distances_;
+  std::vector<std::tuple<float, float, char>> cones_distances_;
   int cones_number_map_;
   float cones_shift_factor_;
 };

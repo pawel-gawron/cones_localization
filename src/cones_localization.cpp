@@ -121,6 +121,7 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
       
       float median_angle;
       float min_distance;
+      char cone_label = bbox.label;
 
       auto min_distance_it = std::min_element(bboxes_points_.begin(), bboxes_points_.end(),
       [](const auto& a, const auto& b) { return std::get<0>(a) < std::get<0>(b); });
@@ -132,7 +133,7 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
       ss << std::fixed << std::setprecision(2) << rounded_min;
       cv::putText(frame_cv, ss.str(), cv::Point(bbox.x2, bbox.y1), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
       
-      cones_distances_.push_back(std::make_tuple(min_distance, median_angle));
+      cones_distances_.push_back(std::make_tuple(min_distance, median_angle, cone_label));
     }
   }
   cv::imshow("Cones from localization", frame_cv);
@@ -157,8 +158,14 @@ std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationPro
   {
     float distance = std::get<0>(cone);
     float angle = std::get<1>(cone);
+    char cone_label = std::get<2>(cone);
+
+    if (std::isnan(distance) || std::isnan(angle)) {
+      break;
+    }
 
     // std::cout << "Distance: " << distance << " Angle: " << angle << std::endl;
+    // std::cout << "Cone label: " << std::get<2>(cone) << std::endl;
 
     float cone_x = msg.position.x + (distance * cos(car_yaw - angle));
     float cone_y = msg.position.y + (distance * sin(car_yaw - angle));
@@ -166,18 +173,44 @@ std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationPro
     // std::cout << "msg.position.x: " << msg.position.x << " msg.position.y: " << msg.position.y << std::endl;
     // std::cout << "cone_x: " << cone_x << " cone_y: " << cone_y << std::endl;
 
-    int radius = 1;
-    for (int i = -radius; i <= radius; ++i) {
-      for (int j = -radius; j <= radius; ++j) {
-        unsigned int grid_x = (cone_x - msg_map_copy->info.origin.position.x) / msg_map_copy->info.resolution;
-        unsigned int grid_y = (cone_y - msg_map_copy->info.origin.position.y) / msg_map_copy->info.resolution;
+    unsigned int grid_x, grid_y;
+    float direction;
 
-        if (grid_x + j < msg_map_copy->info.width &&
-            grid_y + i < msg_map_copy->info.height){
-          int index = (grid_y + i) * msg_map_copy->info.width + (grid_x + j);
-          msg_map_copy->data[index] = 100;
+    direction = cone_label == 'Y' ? M_PI_2 : cone_label == 'B' ? -M_PI_2 : 0;
+
+    float dx = cos(car_yaw + direction);
+    float dy = sin(car_yaw + direction);
+
+    double x_factor = 1.0 / msg_map_copy->info.resolution;
+    double y_factor = 1.0 / msg_map_copy->info.resolution;
+    int last_index = 0;
+
+    while (true) {
+        grid_x = (cone_x - msg_map_copy->info.origin.position.x) * x_factor;
+        grid_y = (cone_y - msg_map_copy->info.origin.position.y) * y_factor;
+
+        if (grid_x >= msg_map_copy->info.width || 
+            grid_y >= msg_map_copy->info.height) {
+          break;
         }
-      }
+
+        int index = (grid_y * msg_map_copy->info.width) + grid_x;
+        if (index == last_index) {
+          cone_x += dx * msg_map_copy->info.resolution;
+          cone_y += dy * msg_map_copy->info.resolution;
+          last_index = index;
+          continue;
+        }
+        if (static_cast<int>(msg_map_copy->data[index]) >= 40) {
+          break;
+        }
+
+        msg_map_copy->data[index] = 100;
+
+        cone_x += dx * msg_map_copy->info.resolution;
+        cone_y += dy * msg_map_copy->info.resolution;
+
+        last_index = index;
     }
   }
   return msg_map_copy;
