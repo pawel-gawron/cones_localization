@@ -85,7 +85,7 @@ void ConesLocalization::bboxesProcessing(std::shared_ptr<const cones_interfaces:
   cones_->bboxes = msg->bboxes;
 }
 
-void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::Image> msg)
+void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::Image> msg, float dt)
 {
   cv::Mat frame_cv;
   frame_cv = cv_bridge::toCvCopy(msg, "bgr8")->image;
@@ -119,8 +119,8 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
     {
       std::sort(bboxes_points_.begin(), bboxes_points_.end());
       
-      float median_angle;
-      float min_distance;
+      float median_angle, median_angle_kalman_filter;
+      float min_distance, min_distance_kalman_filter;
       char cone_label = bbox.label;
 
       auto min_distance_it = std::min_element(bboxes_points_.begin(), bboxes_points_.end(),
@@ -128,12 +128,38 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
       min_distance = std::get<0>(*min_distance_it);
       median_angle = std::get<1>(*min_distance_it);
 
-      float rounded_min = std::round(min_distance * 100) / 100;
-      std::stringstream ss;
-      ss << std::fixed << std::setprecision(2) << rounded_min;
-      cv::putText(frame_cv, ss.str(), cv::Point(bbox.x2, bbox.y1), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
+      if (std::isnan(min_distance)) {
+        continue;
+      }
+
+      kf_distance->predict(dt);
+      kf_angle->predict(dt);
+      kf_distance->update(min_distance, 0.0001);
+      kf_angle->update(median_angle, 0.0001);
+
+      median_angle_kalman_filter = kf_angle->get_mean()[0];
+      min_distance_kalman_filter = kf_distance->get_mean()[0];
       
-      cones_distances_.push_back(std::make_tuple(min_distance, median_angle, cone_label));
+      float rounded_distance_kalman = std::round(min_distance_kalman_filter * 100) / 100;
+      float rounded_distance = std::round(min_distance * 100) / 100;
+      float rounded_angle_kalman = std::round(median_angle_kalman_filter * 100) / 100;
+      float rounded_angle = std::round(median_angle * 100) / 100;
+
+      std::stringstream ss_distance;
+      std::stringstream ss_distance_kalman;
+      std::stringstream ss_angle;
+      std::stringstream ss_angle_kalman;
+      ss_distance_kalman << std::fixed << std::setprecision(2) << rounded_distance_kalman;
+      ss_distance << std::fixed << std::setprecision(2) << rounded_distance;
+      ss_angle_kalman << std::fixed << std::setprecision(2) << rounded_angle_kalman;
+      ss_angle << std::fixed << std::setprecision(2) << rounded_angle;
+
+      cv::putText(frame_cv, ss_distance_kalman.str(), cv::Point(bbox.x2, bbox.y1), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
+      cv::putText(frame_cv, ss_distance.str(), cv::Point(bbox.x1, bbox.y1), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
+      cv::putText(frame_cv, ss_angle_kalman.str(), cv::Point(bbox.x2, bbox.y2), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
+      cv::putText(frame_cv, ss_angle.str(), cv::Point(bbox.x1, bbox.y2), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
+      
+      cones_distances_.push_back(std::make_tuple(min_distance_kalman_filter, median_angle_kalman_filter, cone_label));
     }
   }
   cv::imshow("Cones from localization", frame_cv);
@@ -169,6 +195,9 @@ std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationPro
 
     float cone_x = msg.position.x + (distance * cos(car_yaw - angle));
     float cone_y = msg.position.y + (distance * sin(car_yaw - angle));
+
+    float cone_x_occupied = cone_x;
+    float cone_y_occupied = cone_y;
 
     // std::cout << "msg.position.x: " << msg.position.x << " msg.position.y: " << msg.position.y << std::endl;
     // std::cout << "cone_x: " << cone_x << " cone_y: " << cone_y << std::endl;
@@ -211,6 +240,20 @@ std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationPro
         cone_y += dy * msg_map_copy->info.resolution;
 
         last_index = index;
+    }
+
+    int radius = 3;
+    for (int i = -radius; i <= radius; ++i) {
+      for (int j = -radius; j <= radius; ++j) {
+        grid_x = (cone_x_occupied - msg_map_copy->info.origin.position.x) / msg_map_copy->info.resolution;
+        grid_y = (cone_y_occupied - msg_map_copy->info.origin.position.y) / msg_map_copy->info.resolution;
+
+        if (grid_x + j < msg_map_copy->info.width &&
+            grid_y + i < msg_map_copy->info.height){
+          int index = (grid_y + i) * msg_map_copy->info.width + (grid_x + j);
+          msg_map_copy->data[index] = 100;
+        }
+      }
     }
   }
   return msg_map_copy;

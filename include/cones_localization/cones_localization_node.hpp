@@ -62,6 +62,7 @@ public:
 private:
   ConesLocalizationPtr cones_localization_{nullptr};
   int64_t param_name_{123};
+  std::chrono::steady_clock::time_point previous_time{};
   int image_width_;
   int image_height_;
   bool executed_camera_info_ = false;

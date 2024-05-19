@@ -81,6 +81,8 @@ void ConesLocalizationNode::callbackSync(const cones_interfaces::msg::Cones::Con
   // RCLCPP_INFO(this->get_logger(), "Time difference between lidar and bbox: %f", abs((bboxes_msg->header.stamp.sec + bboxes_msg->header.stamp.nanosec * 1e-9) - (lidar_msg->header.stamp.sec + lidar_msg->header.stamp.nanosec * 1e-9)));
   // RCLCPP_INFO(this->get_logger(), "Time difference between lidar and image: %f", abs((image_msg->header.stamp.sec + image_msg->header.stamp.nanosec * 1e-9) - (lidar_msg->header.stamp.sec + lidar_msg->header.stamp.nanosec * 1e-9)));
   // RCLCPP_INFO(this->get_logger(), "Time difference between lidar and image: %f", abs((loc_msg->header.stamp.sec + loc_msg->header.stamp.nanosec * 1e-9) - (lidar_msg->header.stamp.sec + lidar_msg->header.stamp.nanosec * 1e-9)));
+  auto current_time = std::chrono::steady_clock::now();
+  auto time_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(current_time - previous_time).count();
 
   if (map_msg_ && loc_msg)
   {
@@ -104,7 +106,10 @@ void ConesLocalizationNode::callbackSync(const cones_interfaces::msg::Cones::Con
 
     cones_localization_->lidarProcessing(lidar_msg, fx_, cx_, camera_fov_horizontal_, image_height_, delta_yaw);
     cones_localization_->bboxesProcessing(bboxes_msg);
-    cones_localization_->imageProcessing(image_msg);
+
+    // RCLCPP_INFO(this->get_logger(), "Time elapsed in seconds: %f", time_elapsed * 1e-3);
+    cones_localization_->imageProcessing(image_msg, time_elapsed *  1e-3);
+    previous_time = current_time;
 
     // RCLCPP_INFO(this->get_logger(), "Current pose in costmap frame: %f %f",
     //             current_pose_in_costmap_frame.position.x,
@@ -113,6 +118,9 @@ void ConesLocalizationNode::callbackSync(const cones_interfaces::msg::Cones::Con
     nav_msgs::msg::OccupancyGrid::ConstSharedPtr map_msg_local = cones_localization_->localizationProcessing(current_pose_in_costmap_frame, map_msg_, car_yaw);
 
     map_pub_->publish(*map_msg_local);
+  }
+  else {
+    previous_time = current_time;
   }
 }
 

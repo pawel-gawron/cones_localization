@@ -19,6 +19,8 @@ find_package(rclcpp REQUIRED)
 
 find_package(message_filters REQUIRED)
 
+find_package(Eigen3 REQUIRED)
+
 include_directories(${PROJECT_NAME} SHARED
   ${OpenCV_INCLUDE_DIRS}
 )
@@ -27,8 +29,11 @@ link_libraries(${OpenCV_LIBS} nvinfer nvinfer_plugin nvparsers nvonnxparser ${SP
 
 ament_auto_add_library(${PROJECT_NAME} SHARED
   include/cones_localization/cones_localization.hpp
+  include/cones_localization/kalman_filter.hpp
   include/cones_localization/visibility_control.hpp
   src/cones_localization.cpp
+  src/kalman_filter.cpp
+  src/kalman_filter_test.cpp
 )
 
 ament_auto_add_library(${PROJECT_NAME}_node SHARED

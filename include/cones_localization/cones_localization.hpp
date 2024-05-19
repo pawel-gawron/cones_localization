@@ -36,6 +36,8 @@
 #include "cones_interfaces/msg/bounding_box.hpp" 
 #include "cones_interfaces/msg/cones.hpp" 
 
+#include "kalman_filter.hpp"
+
 
 namespace cones_localization
 {
@@ -51,7 +53,7 @@ public:
                         float image_height,
                         float car_yaw_velocity);
   void bboxesProcessing(std::shared_ptr<const cones_interfaces::msg::Cones> msg);
-  void imageProcessing(std::shared_ptr<const sensor_msgs::msg::Image> msg);
+  void imageProcessing(std::shared_ptr<const sensor_msgs::msg::Image> msg, float dt);
   nav_msgs::msg::OccupancyGrid::SharedPtr localizationProcessing(geometry_msgs::msg::Pose msg,
                                                                   const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map,
                                                                   double car_yaw);
@@ -61,6 +63,9 @@ public:
 
   void setConfig(int conesNumberMap,
                   float conesShiftFactor);
+
+  std::unique_ptr<KF> kf_distance = std::make_unique<KF>(0.0, 0.0, 0.01);
+  std::unique_ptr<KF> kf_angle = std::make_unique<KF>(0.0, 0.0, 0.01);
 
 private:
   std::vector<std::tuple<float, float, float, float>> lidar_points_;
