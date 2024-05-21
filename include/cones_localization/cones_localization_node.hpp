@@ -84,6 +84,9 @@ private:
 
   int cones_number_map_;
   float cones_shift_factor_;
+  float cones_distance_measurement_;
+  bool kalman_on_;
+  float kalman_meas_variance_;
 
   nav_msgs::msg::OccupancyGrid::SharedPtr map_msg_;
 

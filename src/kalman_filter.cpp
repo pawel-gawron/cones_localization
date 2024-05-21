@@ -1,8 +1,8 @@
 #include "cones_localization/kalman_filter.hpp"
 
 KF::KF(float initial_x,
-                    float initial_y,
-                    float accel_variance) {
+        float initial_y,
+        float accel_variance) {
 
     _x[iX] = initial_x;
     _x[iV] = initial_y;
@@ -11,6 +11,14 @@ KF::KF(float initial_x,
 
     _P.setIdentity();
 
+}
+
+void KF::reinitial(float reinitial_x,
+                float reinitial_y){
+    _x[iX] = reinitial_x;
+    _x[iV] = reinitial_y;
+
+    _P.setIdentity();
 }
 
 void KF::predict(float dt) {

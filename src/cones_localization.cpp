@@ -126,40 +126,57 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
       auto min_distance_it = std::min_element(bboxes_points_.begin(), bboxes_points_.end(),
       [](const auto& a, const auto& b) { return std::get<0>(a) < std::get<0>(b); });
       min_distance = std::get<0>(*min_distance_it);
-      median_angle = std::get<1>(*min_distance_it);
 
       if (std::isnan(min_distance)) {
         continue;
       }
 
-      kf_distance->predict(dt);
-      kf_angle->predict(dt);
-      kf_distance->update(min_distance, 0.0001);
-      kf_angle->update(median_angle, 0.0001);
+      if (bboxes_points_.size() % 2 == 0)
+      {
+        median_angle = (std::get<1>(bboxes_points_[bboxes_points_.size() / 2 - 1]) + std::get<1>(bboxes_points_[bboxes_points_.size() / 2])) / 2.0;
+      }
+      else
+      {
+        median_angle = std::get<1>(bboxes_points_[bboxes_points_.size() / 2]);
+      }
 
-      median_angle_kalman_filter = kf_angle->get_mean()[0];
-      min_distance_kalman_filter = kf_distance->get_mean()[0];
+      if (kalman_on_){
+        if (cone_label != previous_cone_label) {
+          kf_distance->reinitial(min_distance, kf_distance->get_mean()[1]);
+          kf_angle->reinitial(median_angle, kf_angle->get_mean()[1]);
+        }
+        else {
+          kf_distance->predict(dt);
+          kf_angle->predict(dt);
+          kf_distance->update(min_distance, kalman_meas_variance_);
+          kf_angle->update(median_angle, kalman_meas_variance_);
+        }
+
+        previous_cone_label = cone_label;
+
+        median_angle_kalman_filter = kf_angle->get_mean()[0];
+        min_distance_kalman_filter = kf_distance->get_mean()[0];
+
+        min_distance = min_distance_kalman_filter;
+        median_angle = median_angle_kalman_filter;
+      }
+
+      if (min_distance > cones_distance_measurement_) {
+        continue;
+      }
       
-      float rounded_distance_kalman = std::round(min_distance_kalman_filter * 100) / 100;
       float rounded_distance = std::round(min_distance * 100) / 100;
-      float rounded_angle_kalman = std::round(median_angle_kalman_filter * 100) / 100;
       float rounded_angle = std::round(median_angle * 100) / 100;
 
       std::stringstream ss_distance;
-      std::stringstream ss_distance_kalman;
       std::stringstream ss_angle;
-      std::stringstream ss_angle_kalman;
-      ss_distance_kalman << std::fixed << std::setprecision(2) << rounded_distance_kalman;
       ss_distance << std::fixed << std::setprecision(2) << rounded_distance;
-      ss_angle_kalman << std::fixed << std::setprecision(2) << rounded_angle_kalman;
       ss_angle << std::fixed << std::setprecision(2) << rounded_angle;
 
-      cv::putText(frame_cv, ss_distance_kalman.str(), cv::Point(bbox.x2, bbox.y1), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
-      cv::putText(frame_cv, ss_distance.str(), cv::Point(bbox.x1, bbox.y1), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
-      cv::putText(frame_cv, ss_angle_kalman.str(), cv::Point(bbox.x2, bbox.y2), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
-      cv::putText(frame_cv, ss_angle.str(), cv::Point(bbox.x1, bbox.y2), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
+      cv::putText(frame_cv, ss_distance.str(), cv::Point(bbox.x2, bbox.y1), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
+      cv::putText(frame_cv, ss_angle.str(), cv::Point(bbox.x2, bbox.y2), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
       
-      cones_distances_.push_back(std::make_tuple(min_distance_kalman_filter, median_angle_kalman_filter, cone_label));
+      cones_distances_.push_back(std::make_tuple(min_distance, median_angle, cone_label));
     }
   }
   cv::imshow("Cones from localization", frame_cv);
@@ -260,10 +277,16 @@ std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationPro
 }
 
 void ConesLocalization::setConfig(int conesNumberMap,
-                                  float conesShiftFactor)
+                                  float conesShiftFactor,
+                                  float conesDistanceMeasurement,
+                                  bool kalmanOn,
+                                  float kalmanMeasVariance)
 {
   cones_number_map_ = conesNumberMap;
   cones_shift_factor_ = conesShiftFactor;
+  cones_distance_measurement_ = conesDistanceMeasurement;
+  kalman_on_ = kalmanOn;
+  kalman_meas_variance_ = kalmanMeasVariance;
 }
 
 }  // namespace cones_localization

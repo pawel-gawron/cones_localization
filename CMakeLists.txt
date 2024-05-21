@@ -33,7 +33,6 @@ ament_auto_add_library(${PROJECT_NAME} SHARED
   include/cones_localization/visibility_control.hpp
   src/cones_localization.cpp
   src/kalman_filter.cpp
-  src/kalman_filter_test.cpp
 )
 
 ament_auto_add_library(${PROJECT_NAME}_node SHARED

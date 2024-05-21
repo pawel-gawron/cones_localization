@@ -20,6 +20,8 @@ class KF {
             float initial_y,
             float accel_variance);
 
+        void reinitial(float reinitial_x,
+                        float reinitial_y);
         void predict(float dt);
         void update(float meas_value, float meas_variance);
         Eigen::Matrix<float, NUMVARS, 1> get_mean();

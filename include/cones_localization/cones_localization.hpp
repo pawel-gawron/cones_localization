@@ -61,8 +61,11 @@ public:
   std::unique_ptr<cones_interfaces::msg::Cones> cones_ = std::make_unique<cones_interfaces::msg::Cones>();
   std::vector<std::tuple<float, float>> bboxes_points_;
 
-  void setConfig(int conesNumberMap,
-                  float conesShiftFactor);
+void setConfig(int conesNumberMap,
+              float conesShiftFactor,
+              float conesDistanceMeasurement,
+              bool kalmanOn,
+              float kalmanMeasVariance);
 
   std::unique_ptr<KF> kf_distance = std::make_unique<KF>(0.0, 0.0, 0.01);
   std::unique_ptr<KF> kf_angle = std::make_unique<KF>(0.0, 0.0, 0.01);
@@ -71,8 +74,14 @@ private:
   std::vector<std::tuple<float, float, float, float>> lidar_points_;
   float max_range_;
   std::vector<std::tuple<float, float, char>> cones_distances_;
+
   int cones_number_map_;
   float cones_shift_factor_;
+  float cones_distance_measurement_;
+  bool kalman_on_;
+  float kalman_meas_variance_;
+
+  char previous_cone_label = '\0';
 };
 
 }  // namespace cones_localization
