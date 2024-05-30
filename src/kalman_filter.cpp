@@ -26,8 +26,6 @@ void KF::predict(float dt) {
     F.setIdentity();
     F.coeffRef(iX, iV) = dt;
 
-    std::cout << std::endl;
-
     Eigen::Matrix<float, NUMVARS, 1> new_x;
 
     new_x = F * _x;

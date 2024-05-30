@@ -80,8 +80,10 @@ private:
   float cones_distance_measurement_;
   bool kalman_on_;
   float kalman_meas_variance_;
+  bool save_obstacle = false;
 
   char previous_cone_label = '\0';
+  char previous_obstacle_cone_label = '\0';
 };
 
 }  // namespace cones_localization

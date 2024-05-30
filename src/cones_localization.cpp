@@ -87,6 +87,7 @@ void ConesLocalization::bboxesProcessing(std::shared_ptr<const cones_interfaces:
 
 void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::Image> msg, float dt)
 {
+  save_obstacle = false;
   cv::Mat frame_cv;
   frame_cv = cv_bridge::toCvCopy(msg, "bgr8")->image;
 
@@ -152,8 +153,6 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
           kf_angle->update(median_angle, kalman_meas_variance_);
         }
 
-        previous_cone_label = cone_label;
-
         median_angle_kalman_filter = kf_angle->get_mean()[0];
         min_distance_kalman_filter = kf_distance->get_mean()[0];
 
@@ -161,7 +160,7 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
         median_angle = median_angle_kalman_filter;
       }
 
-      if (min_distance > cones_distance_measurement_) {
+      if (min_distance > cones_distance_measurement_ || previous_cone_label == cone_label) {
         continue;
       }
       
@@ -177,6 +176,13 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
       cv::putText(frame_cv, ss_angle.str(), cv::Point(bbox.x2, bbox.y2), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
       
       cones_distances_.push_back(std::make_tuple(min_distance, median_angle, cone_label));
+
+      if (previous_obstacle_cone_label != cone_label)
+      {
+          save_obstacle = true;
+      }
+      previous_obstacle_cone_label = cone_label;
+      previous_cone_label = cone_label;
     }
   }
   cv::imshow("Cones from localization", frame_cv);
@@ -273,6 +279,11 @@ std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationPro
       }
     }
   }
+
+  if (save_obstacle) {
+    *msg_map = *msg_map_copy;
+  }
+
   return msg_map_copy;
 }
 
