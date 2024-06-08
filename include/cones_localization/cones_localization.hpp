@@ -84,6 +84,15 @@ private:
 
   char previous_cone_label = '\0';
   char previous_obstacle_cone_label = '\0';
+
+  typedef struct {
+    float x;
+    float y;
+    float angle;
+    float idx;
+  } PointXYI;
+
+  std::vector<PointXYI> cones_posisiton_;
 };
 
 }  // namespace cones_localization

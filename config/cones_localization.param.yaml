@@ -2,6 +2,6 @@
   ros__parameters:
     cones_number_map: 1
     cones_shift_factor: 2.5
-    cones_distance_measurement: 2.5
+    cones_distance_measurement: 2.0
     kalman_on: true
     kalman_meas_variance: 0.00001

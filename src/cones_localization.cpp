@@ -219,72 +219,114 @@ std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationPro
     float cone_x = msg.position.x + (distance * cos(car_yaw - angle));
     float cone_y = msg.position.y + (distance * sin(car_yaw - angle));
 
-    float cone_x_occupied = cone_x;
-    float cone_y_occupied = cone_y;
+    bool temp = false;
 
-    // std::cout << "msg.position.x: " << msg.position.x << " msg.position.y: " << msg.position.y << std::endl;
-    // std::cout << "cone_x: " << cone_x << " cone_y: " << cone_y << std::endl;
-
-    unsigned int grid_x, grid_y;
-    float direction;
-
-    direction = cone_label == 'Y' ? M_PI_2 : cone_label == 'B' ? -M_PI_2 : 0;
-
-    float dx = cos(car_yaw + direction);
-    float dy = sin(car_yaw + direction);
-
-    double x_factor = 1.0 / msg_map_copy->info.resolution;
-    double y_factor = 1.0 / msg_map_copy->info.resolution;
-    int last_index = 0;
-
-    while (true) {
-        grid_x = (cone_x - msg_map_copy->info.origin.position.x) * x_factor;
-        grid_y = (cone_y - msg_map_copy->info.origin.position.y) * y_factor;
-
-        if (grid_x >= msg_map_copy->info.width || 
-            grid_y >= msg_map_copy->info.height) {
+    if (cones_posisiton_.size() > 0) {
+      for (auto& cone_position : cones_posisiton_) {
+        if (std::sqrt(std::pow(cone_x - cone_position.x, 2) + std::pow(cone_y - cone_position.y, 2)) < 0.5) {
+          cone_position.x = (cone_x/cone_position.idx) + ((cone_position.idx-1)/(cone_position.idx) * cone_position.x);
+          cone_position.y = (cone_y/cone_position.idx) + ((cone_position.idx-1)/(cone_position.idx) * cone_position.y);
+          cone_position.angle = (car_yaw/cone_position.idx) + ((cone_position.idx-1)/(cone_position.idx) * cone_position.angle);
+          cone_position.idx += 1;
+          temp = true;
+          std::cout << "Close cone: " << std::sqrt(std::pow(cone_x - cone_position.x, 2) + std::pow(cone_y - cone_position.y, 2)) << std::endl;
           break;
-        }
-
-        int index = (grid_y * msg_map_copy->info.width) + grid_x;
-        if (index == last_index) {
-          cone_x += dx * msg_map_copy->info.resolution;
-          cone_y += dy * msg_map_copy->info.resolution;
-          last_index = index;
-          continue;
-        }
-        if (static_cast<int>(msg_map_copy->data[index]) >= 40) {
-          break;
-        }
-
-        msg_map_copy->data[index] = 100;
-
-        cone_x += dx * msg_map_copy->info.resolution;
-        cone_y += dy * msg_map_copy->info.resolution;
-
-        last_index = index;
-    }
-
-    int radius = 3;
-    for (int i = -radius; i <= radius; ++i) {
-      for (int j = -radius; j <= radius; ++j) {
-        grid_x = (cone_x_occupied - msg_map_copy->info.origin.position.x) / msg_map_copy->info.resolution;
-        grid_y = (cone_y_occupied - msg_map_copy->info.origin.position.y) / msg_map_copy->info.resolution;
-
-        if (grid_x + j < msg_map_copy->info.width &&
-            grid_y + i < msg_map_copy->info.height){
-          int index = (grid_y + i) * msg_map_copy->info.width + (grid_x + j);
-          msg_map_copy->data[index] = 100;
         }
       }
+      if (!temp) {
+        PointXYI cone_position;
+        cone_position.x = cone_x;
+        cone_position.y = cone_y;
+        cone_position.angle = car_yaw;
+        cone_position.idx = 1;
+        cones_posisiton_.push_back(cone_position);
+        std::cout << "Not close cone"<< std::endl;
+      }
     }
-  }
+    else{
+      PointXYI cone_position;
+      cone_position.x = cone_x;
+      cone_position.y = cone_y;
+      cone_position.angle = car_yaw;
+      cone_position.idx = 1;
+      cones_posisiton_.push_back(cone_position);
 
-  if (save_obstacle) {
-    *msg_map = *msg_map_copy;
-  }
+      std::cout << "First cone"<< std::endl;
+    }
 
-  return msg_map_copy;
+    std::cout << "Cones len: " << cones_posisiton_.size() << std::endl;
+
+    if (cones_posisiton_.size() > 0) {
+      for (auto& cone_position : cones_posisiton_) {
+        std::cout << "test" << std::endl;
+        float cone_x = cone_position.x;
+        float cone_y = cone_position.y;
+        car_yaw = cone_position.angle;
+
+        float cone_x_occupied = cone_x;
+        float cone_y_occupied = cone_y;
+
+        unsigned int grid_x, grid_y;
+        float direction;
+
+        direction = cone_label == 'Y' ? M_PI_2 : cone_label == 'B' ? -M_PI_2 : 0;
+
+        float dx = cos(car_yaw + direction);
+        float dy = sin(car_yaw + direction);
+
+        double x_factor = 1.0 / msg_map_copy->info.resolution;
+        double y_factor = 1.0 / msg_map_copy->info.resolution;
+        int last_index = 0;
+
+        while (true) {
+            grid_x = (cone_x - msg_map_copy->info.origin.position.x) * x_factor;
+            grid_y = (cone_y - msg_map_copy->info.origin.position.y) * y_factor;
+
+            if (grid_x >= msg_map_copy->info.width || 
+                grid_y >= msg_map_copy->info.height) {
+              break;
+            }
+
+            int index = (grid_y * msg_map_copy->info.width) + grid_x;
+            if (index == last_index) {
+              cone_x += dx * msg_map_copy->info.resolution;
+              cone_y += dy * msg_map_copy->info.resolution;
+              last_index = index;
+              continue;
+            }
+            if (static_cast<int>(msg_map_copy->data[index]) >= 40) {
+              break;
+            }
+
+            msg_map_copy->data[index] = 100;
+
+            cone_x += dx * msg_map_copy->info.resolution;
+            cone_y += dy * msg_map_copy->info.resolution;
+
+            last_index = index;
+        }
+
+        int radius = 3;
+        for (int i = -radius; i <= radius; ++i) {
+          for (int j = -radius; j <= radius; ++j) {
+            grid_x = (cone_x_occupied - msg_map_copy->info.origin.position.x) / msg_map_copy->info.resolution;
+            grid_y = (cone_y_occupied - msg_map_copy->info.origin.position.y) / msg_map_copy->info.resolution;
+
+            if (grid_x + j < msg_map_copy->info.width &&
+                grid_y + i < msg_map_copy->info.height){
+              int index = (grid_y + i) * msg_map_copy->info.width + (grid_x + j);
+              msg_map_copy->data[index] = 100;
+            }
+          }
+        }
+      }
+  }
+}
+      if (save_obstacle) {
+        *msg_map = *msg_map_copy;
+      }
+
+    return msg_map_copy;
 }
 
 void ConesLocalization::setConfig(int conesNumberMap,
