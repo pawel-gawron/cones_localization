@@ -42,6 +42,24 @@
 namespace cones_localization
 {
 
+typedef struct {
+  float x;
+  float y;
+  double angle;
+  char label;
+  float idx;
+} PointXYI;
+
+void cones_draw(double x_factor,
+                double y_factor,
+                std::shared_ptr<nav_msgs::msg::OccupancyGrid> msg_map_copy,
+                std::vector<PointXYI> cones_posisiton_);
+
+void cones_buffor(std::vector<std::tuple<float, float, char>> cones_distances_,
+                  geometry_msgs::msg::Pose msg,
+                  double car_yaw,
+                  std::vector<PointXYI>& cones_posisiton_);
+
 class CONES_LOCALIZATION_PUBLIC ConesLocalization
 {
 public:
@@ -84,13 +102,6 @@ private:
 
   char previous_cone_label = '\0';
   char previous_obstacle_cone_label = '\0';
-
-  typedef struct {
-    float x;
-    float y;
-    float angle;
-    float idx;
-  } PointXYI;
 
   std::vector<PointXYI> cones_posisiton_;
 };

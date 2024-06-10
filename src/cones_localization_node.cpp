@@ -157,7 +157,7 @@ void ConesLocalizationNode::cameraInfoCallback(const sensor_msgs::msg::CameraInf
 
       angle_min_ = -angle_max_;
 
-      max_y_camera_ = image_height_ - 1;  // Maksymalna współrzędna Y piksela
+      max_y_camera_ = image_height_ - 1;
       min_y_camera_ = -0.1;
 
       executed_camera_info_ = true;

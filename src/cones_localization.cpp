@@ -37,8 +37,6 @@ void ConesLocalization::lidarProcessing(std::shared_ptr<const sensor_msgs::msg::
   uint32_t ranges_size = std::ceil(
     (max_angle - min_angle) / angle_increment);
 
-  // float lidar_fov = max_angle - min_angle; 
-
   std::vector<float> ranges = msg->ranges;
 
   const float camera_offset = 0.1;
@@ -46,7 +44,6 @@ void ConesLocalization::lidarProcessing(std::shared_ptr<const sensor_msgs::msg::
   int y_pixel;
   int x_pixel;
   float x_camera;
-  // float normalized_angle;
   float alpha;
   float angle;
   float distance;
@@ -120,26 +117,19 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
     {
       std::sort(bboxes_points_.begin(), bboxes_points_.end());
       
-      float median_angle, median_angle_kalman_filter;
-      float min_distance, min_distance_kalman_filter;
       char cone_label = bbox.label;
 
       auto min_distance_it = std::min_element(bboxes_points_.begin(), bboxes_points_.end(),
       [](const auto& a, const auto& b) { return std::get<0>(a) < std::get<0>(b); });
-      min_distance = std::get<0>(*min_distance_it);
+      float min_distance = std::get<0>(*min_distance_it);
 
       if (std::isnan(min_distance)) {
         continue;
       }
 
-      if (bboxes_points_.size() % 2 == 0)
-      {
-        median_angle = (std::get<1>(bboxes_points_[bboxes_points_.size() / 2 - 1]) + std::get<1>(bboxes_points_[bboxes_points_.size() / 2])) / 2.0;
-      }
-      else
-      {
-        median_angle = std::get<1>(bboxes_points_[bboxes_points_.size() / 2]);
-      }
+      float median_angle = bboxes_points_.size() % 2 == 0
+          ? (std::get<1>(bboxes_points_[bboxes_points_.size() / 2 - 1]) + std::get<1>(bboxes_points_[bboxes_points_.size() / 2])) / 2.0
+          : std::get<1>(bboxes_points_[bboxes_points_.size() / 2]);
 
       if (kalman_on_){
         if (cone_label != previous_cone_label) {
@@ -153,27 +143,26 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
           kf_angle->update(median_angle, kalman_meas_variance_);
         }
 
-        median_angle_kalman_filter = kf_angle->get_mean()[0];
-        min_distance_kalman_filter = kf_distance->get_mean()[0];
-
-        min_distance = min_distance_kalman_filter;
-        median_angle = median_angle_kalman_filter;
+        min_distance = kf_distance->get_mean()[0];
+        median_angle = kf_angle->get_mean()[0];
       }
 
       if (min_distance > cones_distance_measurement_ || previous_cone_label == cone_label) {
         continue;
       }
-      
-      float rounded_distance = std::round(min_distance * 100) / 100;
-      float rounded_angle = std::round(median_angle * 100) / 100;
 
-      std::stringstream ss_distance;
-      std::stringstream ss_angle;
-      ss_distance << std::fixed << std::setprecision(2) << rounded_distance;
-      ss_angle << std::fixed << std::setprecision(2) << rounded_angle;
+      auto to_string_with_precision = [](float value, int precision) {
+      std::ostringstream out;
+      out << std::fixed << std::setprecision(precision) << value;
+      return out.str();
+      };
 
-      cv::putText(frame_cv, ss_distance.str(), cv::Point(bbox.x2, bbox.y1), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
-      cv::putText(frame_cv, ss_angle.str(), cv::Point(bbox.x2, bbox.y2), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
+      auto draw_text = [&](const std::string& text, int x, int y) {
+          cv::putText(frame_cv, text, cv::Point(x, y), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
+      };
+
+      draw_text(to_string_with_precision(min_distance, 2), bbox.x2, bbox.y1);
+      draw_text(to_string_with_precision(median_angle, 2), bbox.x2, bbox.y2);
       
       cones_distances_.push_back(std::make_tuple(min_distance, median_angle, cone_label));
 
@@ -189,142 +178,28 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
   cv::waitKey(1);
 }
 
-std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationProcessing(geometry_msgs::msg::Pose msg,
-                                                                                        const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map,
-                                                                                        double car_yaw)
+std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationProcessing(
+    geometry_msgs::msg::Pose msg,
+    const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map,
+    double car_yaw) 
 {
-  if (!msg_map) { return msg_map; } 
-
-  std_msgs::msg::Header header;
-  header.stamp = rclcpp::Clock(RCL_ROS_TIME).now();
-  header.frame_id = msg_map->header.frame_id;
-
-  nav_msgs::msg::OccupancyGrid::SharedPtr msg_map_copy = std::make_shared<nav_msgs::msg::OccupancyGrid>(*msg_map);
-
-  msg_map_copy->header = header;
-
-  for (const auto& cone : cones_distances_)
-  {
-    float distance = std::get<0>(cone);
-    float angle = std::get<1>(cone);
-    char cone_label = std::get<2>(cone);
-
-    if (std::isnan(distance) || std::isnan(angle)) {
-      break;
+    if (!msg_map) {
+        return msg_map;
     }
 
-    // std::cout << "Distance: " << distance << " Angle: " << angle << std::endl;
-    // std::cout << "Cone label: " << std::get<2>(cone) << std::endl;
+    std_msgs::msg::Header header;
+    header.stamp = rclcpp::Clock(RCL_ROS_TIME).now();
+    header.frame_id = msg_map->header.frame_id;
 
-    float cone_x = msg.position.x + (distance * cos(car_yaw - angle));
-    float cone_y = msg.position.y + (distance * sin(car_yaw - angle));
+    auto msg_map_copy = std::make_shared<nav_msgs::msg::OccupancyGrid>(*msg_map);
+    msg_map_copy->header = header;
 
-    bool temp = false;
+    cones_buffor(cones_distances_, msg, car_yaw, cones_posisiton_);
 
-    if (cones_posisiton_.size() > 0) {
-      for (auto& cone_position : cones_posisiton_) {
-        if (std::sqrt(std::pow(cone_x - cone_position.x, 2) + std::pow(cone_y - cone_position.y, 2)) < 0.5) {
-          cone_position.x = (cone_x/cone_position.idx) + ((cone_position.idx-1)/(cone_position.idx) * cone_position.x);
-          cone_position.y = (cone_y/cone_position.idx) + ((cone_position.idx-1)/(cone_position.idx) * cone_position.y);
-          cone_position.angle = (car_yaw/cone_position.idx) + ((cone_position.idx-1)/(cone_position.idx) * cone_position.angle);
-          cone_position.idx += 1;
-          temp = true;
-          std::cout << "Close cone: " << std::sqrt(std::pow(cone_x - cone_position.x, 2) + std::pow(cone_y - cone_position.y, 2)) << std::endl;
-          break;
-        }
-      }
-      if (!temp) {
-        PointXYI cone_position;
-        cone_position.x = cone_x;
-        cone_position.y = cone_y;
-        cone_position.angle = car_yaw;
-        cone_position.idx = 1;
-        cones_posisiton_.push_back(cone_position);
-        std::cout << "Not close cone"<< std::endl;
-      }
-    }
-    else{
-      PointXYI cone_position;
-      cone_position.x = cone_x;
-      cone_position.y = cone_y;
-      cone_position.angle = car_yaw;
-      cone_position.idx = 1;
-      cones_posisiton_.push_back(cone_position);
+    double x_factor = 1.0 / msg_map_copy->info.resolution;
+    double y_factor = 1.0 / msg_map_copy->info.resolution;
 
-      std::cout << "First cone"<< std::endl;
-    }
-
-    std::cout << "Cones len: " << cones_posisiton_.size() << std::endl;
-
-    if (cones_posisiton_.size() > 0) {
-      for (auto& cone_position : cones_posisiton_) {
-        std::cout << "test" << std::endl;
-        float cone_x = cone_position.x;
-        float cone_y = cone_position.y;
-        car_yaw = cone_position.angle;
-
-        float cone_x_occupied = cone_x;
-        float cone_y_occupied = cone_y;
-
-        unsigned int grid_x, grid_y;
-        float direction;
-
-        direction = cone_label == 'Y' ? M_PI_2 : cone_label == 'B' ? -M_PI_2 : 0;
-
-        float dx = cos(car_yaw + direction);
-        float dy = sin(car_yaw + direction);
-
-        double x_factor = 1.0 / msg_map_copy->info.resolution;
-        double y_factor = 1.0 / msg_map_copy->info.resolution;
-        int last_index = 0;
-
-        while (true) {
-            grid_x = (cone_x - msg_map_copy->info.origin.position.x) * x_factor;
-            grid_y = (cone_y - msg_map_copy->info.origin.position.y) * y_factor;
-
-            if (grid_x >= msg_map_copy->info.width || 
-                grid_y >= msg_map_copy->info.height) {
-              break;
-            }
-
-            int index = (grid_y * msg_map_copy->info.width) + grid_x;
-            if (index == last_index) {
-              cone_x += dx * msg_map_copy->info.resolution;
-              cone_y += dy * msg_map_copy->info.resolution;
-              last_index = index;
-              continue;
-            }
-            if (static_cast<int>(msg_map_copy->data[index]) >= 40) {
-              break;
-            }
-
-            msg_map_copy->data[index] = 100;
-
-            cone_x += dx * msg_map_copy->info.resolution;
-            cone_y += dy * msg_map_copy->info.resolution;
-
-            last_index = index;
-        }
-
-        int radius = 3;
-        for (int i = -radius; i <= radius; ++i) {
-          for (int j = -radius; j <= radius; ++j) {
-            grid_x = (cone_x_occupied - msg_map_copy->info.origin.position.x) / msg_map_copy->info.resolution;
-            grid_y = (cone_y_occupied - msg_map_copy->info.origin.position.y) / msg_map_copy->info.resolution;
-
-            if (grid_x + j < msg_map_copy->info.width &&
-                grid_y + i < msg_map_copy->info.height){
-              int index = (grid_y + i) * msg_map_copy->info.width + (grid_x + j);
-              msg_map_copy->data[index] = 100;
-            }
-          }
-        }
-      }
-  }
-}
-      if (save_obstacle) {
-        *msg_map = *msg_map_copy;
-      }
+    cones_draw(x_factor, y_factor, msg_map_copy, cones_posisiton_);
 
     return msg_map_copy;
 }
@@ -340,6 +215,96 @@ void ConesLocalization::setConfig(int conesNumberMap,
   cones_distance_measurement_ = conesDistanceMeasurement;
   kalman_on_ = kalmanOn;
   kalman_meas_variance_ = kalmanMeasVariance;
+}
+
+void cones_buffor(std::vector<std::tuple<float, float, char>> cones_distances_,
+                  geometry_msgs::msg::Pose msg,
+                  double car_yaw,
+                  std::vector<PointXYI>& cones_posisiton_)
+{
+    for (const auto& cone : cones_distances_) {
+        float distance = std::get<0>(cone);
+        float angle = std::get<1>(cone);
+        char cone_label = std::get<2>(cone);
+
+        if (std::isnan(distance) || std::isnan(angle)) {
+            break;
+        }
+
+        float cone_x = msg.position.x + (distance * cos(car_yaw - angle));
+        float cone_y = msg.position.y + (distance * sin(car_yaw - angle));
+
+        auto cone_position = std::find_if(cones_posisiton_.begin(), cones_posisiton_.end(), 
+            [&](const PointXYI& cp) {
+                return std::sqrt(std::pow(cone_x - cp.x, 2) + std::pow(cone_y - cp.y, 2)) < 0.4 && cone_label == cp.label;
+            });
+
+        if (cone_position != cones_posisiton_.end()) {
+            cone_position->x = (cone_x / cone_position->idx) + ((cone_position->idx - 1) / cone_position->idx * cone_position->x);
+            cone_position->y = (cone_y / cone_position->idx) + ((cone_position->idx - 1) / cone_position->idx * cone_position->y);
+            cone_position->angle = (car_yaw / cone_position->idx) + ((cone_position->idx - 1) / cone_position->idx * cone_position->angle);
+            cone_position->label = cone_label;
+            cone_position->idx += 1;
+        } else {
+            cones_posisiton_.push_back({cone_x, cone_y, car_yaw, cone_label, 1});
+        }
+    }
+}
+
+
+void cones_draw(double x_factor,
+                double y_factor,
+                std::shared_ptr<nav_msgs::msg::OccupancyGrid> msg_map_copy,
+                std::vector<PointXYI> cones_posisiton_)
+{
+  for (const auto& cone_position : cones_posisiton_) {
+    float cone_x = cone_position.x;
+    float cone_y = cone_position.y;
+    float direction = cone_position.label == 'Y' ? M_PI_2 : cone_position.label == 'B' ? -M_PI_2 : 0;
+
+    float dx = cos(cone_position.angle + direction);
+    float dy = sin(cone_position.angle + direction);
+    unsigned int grid_x, grid_y;
+    int last_index = -1;
+
+    while (true) {
+      grid_x = (cone_x - msg_map_copy->info.origin.position.x) * x_factor;
+      grid_y = (cone_y - msg_map_copy->info.origin.position.y) * y_factor;
+
+      if (grid_x >= msg_map_copy->info.width || grid_y >= msg_map_copy->info.height) {
+        break;
+      }
+
+      int index = (grid_y * msg_map_copy->info.width) + grid_x;
+      if (index == last_index) {
+        cone_x += dx * msg_map_copy->info.resolution;
+        cone_y += dy * msg_map_copy->info.resolution;
+        continue;
+      }
+
+      if (static_cast<int>(msg_map_copy->data[index]) >= 40) {
+        break;
+      }
+
+      msg_map_copy->data[index] = 100;
+      cone_x += dx * msg_map_copy->info.resolution;
+      cone_y += dy * msg_map_copy->info.resolution;
+      last_index = index;
+    }
+
+      grid_x = (cone_position.x - msg_map_copy->info.origin.position.x) * x_factor;
+      grid_y = (cone_position.y - msg_map_copy->info.origin.position.y) * y_factor;
+
+      int radius = 3;
+      for (int i = -radius; i <= radius; ++i) {
+        for (int j = -radius; j <= radius; ++j) {
+          if (grid_x + j < msg_map_copy->info.width && grid_y + i < msg_map_copy->info.height) {
+            int index = (grid_y + i) * msg_map_copy->info.width + (grid_x + j);
+            msg_map_copy->data[index] = 100;
+          }
+        }
+      }
+  }
 }
 
 }  // namespace cones_localization
