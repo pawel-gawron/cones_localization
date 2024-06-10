@@ -23,24 +23,24 @@ ConesLocalization::ConesLocalization()
 {
 }
 
-void ConesLocalization::lidarProcessing(std::shared_ptr<const sensor_msgs::msg::LaserScan> msg,
+void ConesLocalization::lidarProcessing(std::shared_ptr<const sensor_msgs::msg::LaserScan> msg_lidar,
                                         float fx, float cx,
                                         float camera_fov_horizontal, float image_height,
                                         float car_yaw_velocity)
 {
   lidar_points_.clear();
 
-  float min_angle = msg->angle_min;
-  float max_angle = msg->angle_max;
-  float angle_increment = msg->angle_increment;
+  float min_angle = msg_lidar->angle_min;
+  float max_angle = msg_lidar->angle_max;
+  float angle_increment = msg_lidar->angle_increment;
 
   uint32_t ranges_size = std::ceil(
     (max_angle - min_angle) / angle_increment);
 
-  std::vector<float> ranges = msg->ranges;
+  std::vector<float> ranges = msg_lidar->ranges;
 
   const float camera_offset = 0.1;
-  max_range_ = msg->range_max;
+  max_range_ = msg_lidar->range_max;
   int y_pixel;
   int x_pixel;
   float x_camera;
@@ -76,17 +76,16 @@ void ConesLocalization::lidarProcessing(std::shared_ptr<const sensor_msgs::msg::
   }
 }
 
-void ConesLocalization::bboxesProcessing(std::shared_ptr<const cones_interfaces::msg::Cones> msg)
+void ConesLocalization::bboxesProcessing(std::shared_ptr<const cones_interfaces::msg::Cones> msg_bboxes)
 {
-  cones_->header = msg->header;
-  cones_->bboxes = msg->bboxes;
+  cones_->header = msg_bboxes->header;
+  cones_->bboxes = msg_bboxes->bboxes;
 }
 
-void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::Image> msg, float dt)
+void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::Image> msg_image, float dt)
 {
   save_obstacle = false;
-  cv::Mat frame_cv;
-  frame_cv = cv_bridge::toCvCopy(msg, "bgr8")->image;
+  cv::Mat frame_cv = cv_bridge::toCvCopy(msg_image, "bgr8")->image;
 
   cones_distances_.clear();
   
@@ -179,7 +178,7 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
 }
 
 std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationProcessing(
-    geometry_msgs::msg::Pose msg,
+    geometry_msgs::msg::Pose msg_loc,
     const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map,
     double car_yaw) 
 {
@@ -194,7 +193,7 @@ std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationPro
     auto msg_map_copy = std::make_shared<nav_msgs::msg::OccupancyGrid>(*msg_map);
     msg_map_copy->header = header;
 
-    cones_buffor(cones_distances_, msg, car_yaw, cones_posisiton_);
+    cones_buffor(cones_distances_, msg_loc, car_yaw, cones_posisiton_);
 
     double x_factor = 1.0 / msg_map_copy->info.resolution;
     double y_factor = 1.0 / msg_map_copy->info.resolution;
@@ -218,7 +217,7 @@ void ConesLocalization::setConfig(int conesNumberMap,
 }
 
 void cones_buffor(std::vector<std::tuple<float, float, char>> cones_distances_,
-                  geometry_msgs::msg::Pose msg,
+                  geometry_msgs::msg::Pose msg_loc,
                   double car_yaw,
                   std::vector<PointXYI>& cones_posisiton_)
 {
@@ -231,8 +230,8 @@ void cones_buffor(std::vector<std::tuple<float, float, char>> cones_distances_,
             break;
         }
 
-        float cone_x = msg.position.x + (distance * cos(car_yaw - angle));
-        float cone_y = msg.position.y + (distance * sin(car_yaw - angle));
+        float cone_x = msg_loc.position.x + (distance * cos(car_yaw - angle));
+        float cone_y = msg_loc.position.y + (distance * sin(car_yaw - angle));
 
         auto cone_position = std::find_if(cones_posisiton_.begin(), cones_posisiton_.end(), 
             [&](const PointXYI& cp) {

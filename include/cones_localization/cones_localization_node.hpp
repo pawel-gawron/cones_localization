@@ -107,8 +107,8 @@ private:
                                                     geometry_msgs::msg::PoseStamped> approximate_policy;
   typedef message_filters::Synchronizer<approximate_policy> approximate_synchronizer;
 
-  void cameraInfoCallback(const sensor_msgs::msg::CameraInfo::SharedPtr msg);
-  void mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg);
+  void cameraInfoCallback(const sensor_msgs::msg::CameraInfo::SharedPtr msg_camera);
+  void mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map);
   void callbackSync(const cones_interfaces::msg::Cones::ConstSharedPtr &bboxes_msg,
                     const sensor_msgs::msg::Image::ConstSharedPtr &image_msg,
                     const sensor_msgs::msg::LaserScan::ConstSharedPtr &lidar_msg,

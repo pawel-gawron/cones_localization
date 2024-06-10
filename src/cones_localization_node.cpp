@@ -130,20 +130,20 @@ void ConesLocalizationNode::callbackSync(const cones_interfaces::msg::Cones::Con
   }
 }
 
-void ConesLocalizationNode::cameraInfoCallback(const sensor_msgs::msg::CameraInfo::SharedPtr msg)
+void ConesLocalizationNode::cameraInfoCallback(const sensor_msgs::msg::CameraInfo::SharedPtr msg_camera)
 {
     if (!executed_camera_info_)
     {
-      fx_ = msg->k[0];
-      cx_ = msg->k[2];
-      fy_ = msg->k[4];
-      cy_ = msg->k[5];
+      fx_ = msg_camera->k[0];
+      cx_ = msg_camera->k[2];
+      fy_ = msg_camera->k[4];
+      cy_ = msg_camera->k[5];
 
-      camera_matrix_ = cv::Mat(3, 3, CV_64F, msg->k.data());
-      distortion_coefficients_ = cv::Mat(1, 5, CV_64F, msg->d.data());
+      camera_matrix_ = cv::Mat(3, 3, CV_64F, msg_camera->k.data());
+      distortion_coefficients_ = cv::Mat(1, 5, CV_64F, msg_camera->d.data());
       // float cy = msg->k[5]; 
-      image_width_ = msg->width;
-      image_height_ = msg->height;
+      image_width_ = msg_camera->width;
+      image_height_ = msg_camera->height;
 
       max_x_camera_ = (image_width_ - 1 - cx_) / fx_;
       min_x_camera_ = -cx_ / fx_;
@@ -164,11 +164,11 @@ void ConesLocalizationNode::cameraInfoCallback(const sensor_msgs::msg::CameraInf
     }
 }
 
-void ConesLocalizationNode::mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
+void ConesLocalizationNode::mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map)
 {
   if(!executed_map_)
   {
-    map_msg_ = msg;
+    map_msg_ = msg_map;
     executed_map_ = true;
   }
 }

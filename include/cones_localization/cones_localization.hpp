@@ -56,54 +56,54 @@ void cones_draw(double x_factor,
                 std::vector<PointXYI> cones_posisiton_);
 
 void cones_buffor(std::vector<std::tuple<float, float, char>> cones_distances_,
-                  geometry_msgs::msg::Pose msg,
+                  geometry_msgs::msg::Pose msg_loc,
                   double car_yaw,
                   std::vector<PointXYI>& cones_posisiton_);
 
 class CONES_LOCALIZATION_PUBLIC ConesLocalization
 {
-public:
-  ConesLocalization();
+  public:
+    ConesLocalization();
 
-  void lidarProcessing(std::shared_ptr<const sensor_msgs::msg::LaserScan> msg,
-                        float fx, float cx,
-                        float camera_fov_horizontal,
-                        float image_height,
-                        float car_yaw_velocity);
-  void bboxesProcessing(std::shared_ptr<const cones_interfaces::msg::Cones> msg);
-  void imageProcessing(std::shared_ptr<const sensor_msgs::msg::Image> msg, float dt);
-  nav_msgs::msg::OccupancyGrid::SharedPtr localizationProcessing(geometry_msgs::msg::Pose msg,
-                                                                  const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map,
-                                                                  double car_yaw);
+    void lidarProcessing(std::shared_ptr<const sensor_msgs::msg::LaserScan> msg_lidar,
+                          float fx, float cx,
+                          float camera_fov_horizontal,
+                          float image_height,
+                          float car_yaw_velocity);
+    void bboxesProcessing(std::shared_ptr<const cones_interfaces::msg::Cones> msg_bboxes);
+    void imageProcessing(std::shared_ptr<const sensor_msgs::msg::Image> msg_image, float dt);
+    nav_msgs::msg::OccupancyGrid::SharedPtr localizationProcessing(geometry_msgs::msg::Pose msg_loc,
+                                                                    const nav_msgs::msg::OccupancyGrid::SharedPtr msg_map,
+                                                                    double car_yaw);
 
-  std::unique_ptr<cones_interfaces::msg::Cones> cones_ = std::make_unique<cones_interfaces::msg::Cones>();
-  std::vector<std::tuple<float, float>> bboxes_points_;
+    std::unique_ptr<cones_interfaces::msg::Cones> cones_ = std::make_unique<cones_interfaces::msg::Cones>();
+    std::vector<std::tuple<float, float>> bboxes_points_;
 
-void setConfig(int conesNumberMap,
-              float conesShiftFactor,
-              float conesDistanceMeasurement,
-              bool kalmanOn,
-              float kalmanMeasVariance);
+    void setConfig(int conesNumberMap,
+                  float conesShiftFactor,
+                  float conesDistanceMeasurement,
+                  bool kalmanOn,
+                  float kalmanMeasVariance);
 
-  std::unique_ptr<KF> kf_distance = std::make_unique<KF>(0.0, 0.0, 0.01);
-  std::unique_ptr<KF> kf_angle = std::make_unique<KF>(0.0, 0.0, 0.01);
+    std::unique_ptr<KF> kf_distance = std::make_unique<KF>(0.0, 0.0, 0.01);
+    std::unique_ptr<KF> kf_angle = std::make_unique<KF>(0.0, 0.0, 0.01);
 
-private:
-  std::vector<std::tuple<float, float, float, float>> lidar_points_;
-  float max_range_;
-  std::vector<std::tuple<float, float, char>> cones_distances_;
+  private:
+    std::vector<std::tuple<float, float, float, float>> lidar_points_;
+    float max_range_;
+    std::vector<std::tuple<float, float, char>> cones_distances_;
 
-  int cones_number_map_;
-  float cones_shift_factor_;
-  float cones_distance_measurement_;
-  bool kalman_on_;
-  float kalman_meas_variance_;
-  bool save_obstacle = false;
+    int cones_number_map_;
+    float cones_shift_factor_;
+    float cones_distance_measurement_;
+    bool kalman_on_;
+    float kalman_meas_variance_;
+    bool save_obstacle = false;
 
-  char previous_cone_label = '\0';
-  char previous_obstacle_cone_label = '\0';
+    char previous_cone_label = '\0';
+    char previous_obstacle_cone_label = '\0';
 
-  std::vector<PointXYI> cones_posisiton_;
+    std::vector<PointXYI> cones_posisiton_;
 };
 
 }  // namespace cones_localization
