@@ -38,6 +38,8 @@
 
 #include "kalman_filter.hpp"
 
+#include <kalman_filter/kalman_filter.hpp>
+
 
 namespace cones_localization
 {

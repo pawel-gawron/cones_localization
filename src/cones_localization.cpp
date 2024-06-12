@@ -105,17 +105,13 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
       int x = std::get<0>(point);
       int y = std::get<1>(point);
       int bbox_width = abs(bbox.x2 - bbox.x1);
-
-      std::cout << "bbox.x1 - bbox.x2: " << abs(bbox.x1 - bbox.x2) << std::endl;
-      std::cout << "bbox.y1 - bbox.y2: " << abs(bbox.y1 - bbox.y2)  << std::endl;
-      std::cout << "0.1 * frame_cv.cols: " << 0.1 * frame_cv.cols << std::endl;
-      std::cout << "0.1 * frame_cv.rows: " << 0.1 * frame_cv.rows << std::endl;
+      int bbox_height = abs(bbox.y2 - bbox.y1);
       
       if(x >= bbox.x1 - bbox_width / 2 &&
           x <= bbox.x2 + bbox_width / 2  &&
           y >= bbox.y1 && y <= bbox.y2 &&
-          abs(bbox.x1 - bbox.x2) > 0.1 * frame_cv.cols &&
-          abs(bbox.y1 - bbox.y2) > 0.1 * frame_cv.rows)
+          bbox_width > 0.01 * frame_cv.cols &&
+          bbox_height > 0.01 * frame_cv.rows)
       {
         cv::circle(frame_cv, cv::Point(x, y), 2, cv::Scalar(0, 0, 255), -1);
         bboxes_points_.push_back(std::make_tuple(std::get<2>(point), std::get<3>(point)));
