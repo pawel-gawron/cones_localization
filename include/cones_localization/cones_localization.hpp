@@ -89,8 +89,8 @@ class CONES_LOCALIZATION_PUBLIC ConesLocalization
                   float kalmanMeasVariance,
                   int cones_diameter_on_map);
 
-    std::unique_ptr<KF> kf_distance = std::make_unique<KF>(0.0, 0.0, 0.01);
-    std::unique_ptr<KF> kf_angle = std::make_unique<KF>(0.0, 0.0, 0.01);
+    std::unique_ptr<KalmanFilter> kf_distance;
+    std::unique_ptr<KalmanFilter> kf_angle;
 
   private:
     std::vector<std::tuple<float, float, float, float>> lidar_points_;

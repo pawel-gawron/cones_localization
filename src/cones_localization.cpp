@@ -20,7 +20,28 @@ namespace cones_localization
 {
 
 ConesLocalization::ConesLocalization()
+  : kf_distance(std::make_unique<KalmanFilter>()), kf_angle(std::make_unique<KalmanFilter>())
 {
+    Eigen::MatrixXd A(2, 2);
+    Eigen::MatrixXd B(2, 1);
+    Eigen::MatrixXd C(1, 2);
+    Eigen::MatrixXd Q(2, 2);
+    Eigen::MatrixXd R(1, 1);
+    Eigen::MatrixXd P_initial(2, 2);
+    Eigen::MatrixXd x_initial(2, 1);
+
+    A << 1, 0,
+         0, 1;
+    B << 0.5, 1;
+    C << 1, 0;
+    Q << 0.01, 0,
+         0, 0.01;
+    R << kalman_meas_variance_;
+    P_initial.setIdentity();
+    x_initial << 0.0, 0.0;
+
+    kf_distance->init(x_initial, A, B, C, Q, R, P_initial);
+    kf_angle->init(x_initial, A, B, C, Q, R, P_initial);
 }
 
 void ConesLocalization::lidarProcessing(std::shared_ptr<const sensor_msgs::msg::LaserScan> msg_lidar,
@@ -136,19 +157,41 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
           : std::get<1>(bboxes_points_[bboxes_points_.size() / 2]);
 
       if (kalman_on_){
+        Eigen::MatrixXd x_initial(2, 1);
+        Eigen::MatrixXd P(2, 2);
+
         if (cone_label != previous_cone_label) {
-          kf_distance->reinitial(min_distance, kf_distance->get_mean()[1]);
-          kf_angle->reinitial(median_angle, kf_angle->get_mean()[1]);
+          kf_distance->getP(P);
+          x_initial << min_distance, kf_distance->getXelement(1);
+          kf_distance->init(x_initial, P);
+
+          kf_angle->getP(P);
+          x_initial << median_angle, kf_angle->getXelement(1);
+          kf_angle->init(x_initial, P);
         }
         else {
-          kf_distance->predict(dt);
-          kf_angle->predict(dt);
-          kf_distance->update(min_distance, kalman_meas_variance_);
-          kf_angle->update(median_angle, kalman_meas_variance_);
+          Eigen::MatrixXd u(1, 1);
+          u << dt;
+
+          kf_distance->predict(u);
+          kf_angle->predict(u);
+
+          Eigen::MatrixXd y_distance(1, 1);
+          y_distance << min_distance;
+          kf_distance->update(y_distance);
+
+          Eigen::MatrixXd y_angle(1, 1);
+          y_angle << median_angle;
+          kf_angle->update(y_angle);
         }
 
-        min_distance = kf_distance->get_mean()[0];
-        median_angle = kf_angle->get_mean()[0];
+        Eigen::MatrixXd x_distance;
+        kf_distance->getX(x_distance);
+        min_distance = x_distance(0, 0);
+
+        Eigen::MatrixXd x_angle;
+        kf_angle->getX(x_angle);
+        median_angle = x_angle(0, 0);
       }
 
       if (min_distance > cones_distance_measurement_ || previous_cone_label == cone_label) {
