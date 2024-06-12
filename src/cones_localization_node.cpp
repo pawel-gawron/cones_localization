@@ -45,6 +45,7 @@ ConesLocalizationNode::ConesLocalizationNode(const rclcpp::NodeOptions & options
   cones_distance_measurement_ = declare_parameter<float>("cones_distance_measurement");
   kalman_on_ = declare_parameter<bool>("kalman_on");
   kalman_meas_variance_ = declare_parameter<float>("kalman_meas_variance");
+  cones_diameter_on_map_ = declare_parameter<int>("cones_diameter_on_map");
 
   bboxes_sub_.subscribe(this, "/output_bboxes", rmw_qos_profile_sensor_data);
   image_sub_.subscribe(this, "/output_image", rmw_qos_profile_sensor_data);
@@ -62,7 +63,8 @@ ConesLocalizationNode::ConesLocalizationNode(const rclcpp::NodeOptions & options
                                   cones_shift_factor_,
                                   cones_distance_measurement_,
                                   kalman_on_,
-                                  kalman_meas_variance_);
+                                  kalman_meas_variance_,
+                                  cones_diameter_on_map_);
 
   camera_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
   "/sensing/camera/camera_info",

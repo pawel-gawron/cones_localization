@@ -203,7 +203,7 @@ std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationPro
     double x_factor = 1.0 / msg_map_copy->info.resolution;
     double y_factor = 1.0 / msg_map_copy->info.resolution;
 
-    cones_draw(x_factor, y_factor, msg_map_copy, cones_posisiton_);
+    cones_draw(x_factor, y_factor, msg_map_copy, cones_posisiton_, cones_diameter_on_map_);
 
     return msg_map_copy;
 }
@@ -212,13 +212,15 @@ void ConesLocalization::setConfig(int conesNumberMap,
                                   float conesShiftFactor,
                                   float conesDistanceMeasurement,
                                   bool kalmanOn,
-                                  float kalmanMeasVariance)
+                                  float kalmanMeasVariance,
+                                  int cones_diameter_on_map)
 {
   cones_number_map_ = conesNumberMap;
   cones_shift_factor_ = conesShiftFactor;
   cones_distance_measurement_ = conesDistanceMeasurement;
   kalman_on_ = kalmanOn;
   kalman_meas_variance_ = kalmanMeasVariance;
+  cones_diameter_on_map_ = cones_diameter_on_map;
 }
 
 void cones_buffor(std::vector<std::tuple<float, float, char>> cones_distances_,
@@ -259,7 +261,8 @@ void cones_buffor(std::vector<std::tuple<float, float, char>> cones_distances_,
 void cones_draw(double x_factor,
                 double y_factor,
                 std::shared_ptr<nav_msgs::msg::OccupancyGrid> msg_map_copy,
-                std::vector<PointXYI> cones_posisiton_)
+                std::vector<PointXYI> cones_posisiton_,
+                int cones_diameter_on_map)
 {
   for (const auto& cone_position : cones_posisiton_) {
     float cone_x = cone_position.x;
@@ -299,9 +302,8 @@ void cones_draw(double x_factor,
       grid_x = (cone_position.x - msg_map_copy->info.origin.position.x) * x_factor;
       grid_y = (cone_position.y - msg_map_copy->info.origin.position.y) * y_factor;
 
-      int radius = 3;
-      for (int i = -radius; i <= radius; ++i) {
-        for (int j = -radius; j <= radius; ++j) {
+      for (int i = -cones_diameter_on_map; i <= cones_diameter_on_map; ++i) {
+        for (int j = -cones_diameter_on_map; j <= cones_diameter_on_map; ++j) {
           if (grid_x + j < msg_map_copy->info.width && grid_y + i < msg_map_copy->info.height) {
             int index = (grid_y + i) * msg_map_copy->info.width + (grid_x + j);
             msg_map_copy->data[index] = 100;

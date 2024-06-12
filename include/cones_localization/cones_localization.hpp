@@ -55,7 +55,8 @@ typedef struct {
 void cones_draw(double x_factor,
                 double y_factor,
                 std::shared_ptr<nav_msgs::msg::OccupancyGrid> msg_map_copy,
-                std::vector<PointXYI> cones_posisiton_);
+                std::vector<PointXYI> cones_posisiton_,
+                int cones_diameter_on_map);
 
 void cones_buffor(std::vector<std::tuple<float, float, char>> cones_distances_,
                   geometry_msgs::msg::Pose msg_loc,
@@ -85,7 +86,8 @@ class CONES_LOCALIZATION_PUBLIC ConesLocalization
                   float conesShiftFactor,
                   float conesDistanceMeasurement,
                   bool kalmanOn,
-                  float kalmanMeasVariance);
+                  float kalmanMeasVariance,
+                  int cones_diameter_on_map);
 
     std::unique_ptr<KF> kf_distance = std::make_unique<KF>(0.0, 0.0, 0.01);
     std::unique_ptr<KF> kf_angle = std::make_unique<KF>(0.0, 0.0, 0.01);
@@ -100,6 +102,7 @@ class CONES_LOCALIZATION_PUBLIC ConesLocalization
     float cones_distance_measurement_;
     bool kalman_on_;
     float kalman_meas_variance_;
+    int cones_diameter_on_map_;
     bool save_obstacle = false;
 
     char previous_cone_label = '\0';

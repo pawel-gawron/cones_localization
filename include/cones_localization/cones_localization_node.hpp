@@ -87,6 +87,7 @@ private:
   float cones_distance_measurement_;
   bool kalman_on_;
   float kalman_meas_variance_;
+  int cones_diameter_on_map_;
 
   nav_msgs::msg::OccupancyGrid::SharedPtr map_msg_;
 
