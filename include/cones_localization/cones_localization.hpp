@@ -87,7 +87,8 @@ class CONES_LOCALIZATION_PUBLIC ConesLocalization
                   float conesDistanceMeasurement,
                   bool kalmanOn,
                   float kalmanMeasVariance,
-                  int cones_diameter_on_map);
+                  int cones_diameter_on_map,
+                  bool show_image_);
 
     std::unique_ptr<KF> kf_distance = std::make_unique<KF>(0.0, 0.0, 0.01);
     std::unique_ptr<KF> kf_angle = std::make_unique<KF>(0.0, 0.0, 0.01);
@@ -103,6 +104,8 @@ class CONES_LOCALIZATION_PUBLIC ConesLocalization
     bool kalman_on_;
     float kalman_meas_variance_;
     int cones_diameter_on_map_;
+    bool show_image_;
+    
     bool save_obstacle = false;
 
     char previous_cone_label = '\0';

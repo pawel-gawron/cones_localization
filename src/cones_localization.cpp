@@ -110,8 +110,8 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
       if(x >= bbox.x1 - bbox_width / 2 &&
           x <= bbox.x2 + bbox_width / 2  &&
           y >= bbox.y1 && y <= bbox.y2 &&
-          bbox_width > 0.01 * frame_cv.cols &&
-          bbox_height > 0.01 * frame_cv.rows)
+          bbox_width > 0.025 * frame_cv.cols &&
+          bbox_height > 0.025 * frame_cv.rows)
       {
         cv::circle(frame_cv, cv::Point(x, y), 2, cv::Scalar(0, 0, 255), -1);
         bboxes_points_.push_back(std::make_tuple(std::get<2>(point), std::get<3>(point)));
@@ -178,8 +178,12 @@ void ConesLocalization::imageProcessing(std::shared_ptr<const sensor_msgs::msg::
       previous_cone_label = cone_label;
     }
   }
-  cv::imshow("Cones from localization", frame_cv);
-  cv::waitKey(1);
+
+  if (show_image_)
+  {
+    cv::imshow("Cones from localization", frame_cv);
+    cv::waitKey(1);
+  }
 }
 
 std::shared_ptr<nav_msgs::msg::OccupancyGrid> ConesLocalization::localizationProcessing(
@@ -213,7 +217,8 @@ void ConesLocalization::setConfig(int conesNumberMap,
                                   float conesDistanceMeasurement,
                                   bool kalmanOn,
                                   float kalmanMeasVariance,
-                                  int cones_diameter_on_map)
+                                  int cones_diameter_on_map,
+                                  bool show_image)
 {
   cones_number_map_ = conesNumberMap;
   cones_shift_factor_ = conesShiftFactor;
@@ -221,6 +226,7 @@ void ConesLocalization::setConfig(int conesNumberMap,
   kalman_on_ = kalmanOn;
   kalman_meas_variance_ = kalmanMeasVariance;
   cones_diameter_on_map_ = cones_diameter_on_map;
+  show_image_ = show_image;
 }
 
 void cones_buffor(std::vector<std::tuple<float, float, char>> cones_distances_,

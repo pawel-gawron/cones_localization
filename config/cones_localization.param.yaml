@@ -6,3 +6,4 @@
     kalman_on: true
     kalman_meas_variance: 0.00001
     cones_diameter_on_map: 1
+    show_image: false
